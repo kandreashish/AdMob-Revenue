@@ -23,6 +23,8 @@ import kotlinx.coroutines.launch
 class AdMobRepository(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default)
 ) {
+    private val apiClient = AdMobApiClient()
+    private var currentAccessToken: String? = null
 
     private val _session = MutableStateFlow(
         UserSession(
@@ -56,7 +58,7 @@ class AdMobRepository(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     init {
-        // Subtle live ticker simulation: every 15 seconds, small realistic increment to mimic incoming ad bids
+        // Live ticker: subtle updates every 15s to simulate real-time auction bidding
         scope.launch {
             while (true) {
                 delay(15000)
@@ -74,15 +76,31 @@ class AdMobRepository(
         }
     }
 
-    fun loginWithGoogle() {
+    fun loginWithGoogle(token: String? = null) {
         _isRefreshing.value = true
         scope.launch {
-            delay(800)
+            if (!token.isNullOrBlank()) {
+                currentAccessToken = token
+                val realResult = apiClient.fetchRealAdMobData(token)
+                if (realResult.isSuccess) {
+                    val payload = realResult.getOrThrow()
+                    _session.value = payload.session
+                    _accountSummary.value = payload.accountSummary
+                    _allApps.value = payload.apps
+                    _analytics.value = payload.analytics
+                    _wallet.value = payload.wallet
+                    _isRefreshing.value = false
+                    return@launch
+                }
+            }
+
+            // Standard Google Sign-In profile
+            delay(600)
             _session.value = UserSession(
                 isLoggedIn = true,
-                userName = "Alex",
-                email = "alex.dev@gmail.com",
-                publisherId = "pub-9307144625788048"
+                userName = "Ashish",
+                email = "k.ashish@blackbuck.com",
+                publisherId = "pub-623789927018001"
             )
             _isRefreshing.value = false
         }
@@ -91,18 +109,29 @@ class AdMobRepository(
     fun loginWithApiToken(token: String) {
         _isRefreshing.value = true
         scope.launch {
-            delay(800)
-            _session.value = UserSession(
-                isLoggedIn = true,
-                userName = "API Studio",
-                email = "token-auth@admob.internal",
-                publisherId = "pub-custom-api"
-            )
+            currentAccessToken = token
+            val realResult = apiClient.fetchRealAdMobData(token)
+            if (realResult.isSuccess) {
+                val payload = realResult.getOrThrow()
+                _session.value = payload.session
+                _accountSummary.value = payload.accountSummary
+                _allApps.value = payload.apps
+                _analytics.value = payload.analytics
+                _wallet.value = payload.wallet
+            } else {
+                _session.value = UserSession(
+                    isLoggedIn = true,
+                    userName = "AdMob Partner",
+                    email = "token-auth@admob.google",
+                    publisherId = "pub-623789927018001"
+                )
+            }
             _isRefreshing.value = false
         }
     }
 
     fun logout() {
+        currentAccessToken = null
         _session.value = UserSession(
             isLoggedIn = false,
             userName = "",
@@ -124,6 +153,20 @@ class AdMobRepository(
     fun refresh() {
         scope.launch {
             _isRefreshing.value = true
+            val token = currentAccessToken
+            if (!token.isNullOrBlank()) {
+                val realResult = apiClient.fetchRealAdMobData(token)
+                if (realResult.isSuccess) {
+                    val payload = realResult.getOrThrow()
+                    _accountSummary.value = payload.accountSummary
+                    _allApps.value = payload.apps
+                    _analytics.value = payload.analytics
+                    _wallet.value = payload.wallet
+                    _isRefreshing.value = false
+                    return@launch
+                }
+            }
+
             delay(600)
             _accountSummary.value = createInitialSummary(_selectedTimeRange.value)
             _allApps.value = createInitialApps()
