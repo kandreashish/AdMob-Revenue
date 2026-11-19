@@ -1,4 +1,4 @@
-package com.solarad.app.android
+package com.lavish.admob.android
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

@@ -1,14 +1,15 @@
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.googleServices)
 }
 
 android {
-    namespace = "com.solarad.app.android"
+    namespace = "com.lavish.admob.android"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.solarad.app"
+        applicationId = "com.lavish.admob"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = (project.property("app.versionCode") as String).toInt()
