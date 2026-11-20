@@ -626,7 +626,19 @@ class DesktopGoogleAuthManager(
                 }
                 TokenResult(errorMessage = detail)
             } else {
-                val token = jsonParser.decodeFromString<GoogleTokenResponse>(text)
+                val json = jsonParser.parseToJsonElement(text).jsonObject
+                val accessToken = json["access_token"]?.jsonPrimitive?.content ?: ""
+                val refreshToken = json["refresh_token"]?.jsonPrimitive?.content
+                val expiresIn = json["expires_in"]?.jsonPrimitive?.content?.toLongOrNull() ?: 3600L
+                val tokenType = json["token_type"]?.jsonPrimitive?.content ?: "Bearer"
+                val idToken = json["id_token"]?.jsonPrimitive?.content
+                val token = GoogleTokenResponse(
+                    access_token = accessToken,
+                    refresh_token = refreshToken,
+                    expires_in = expiresIn,
+                    token_type = tokenType,
+                    id_token = idToken
+                )
                 TokenResult(tokenResponse = token)
             }
         } catch (e: Exception) {
@@ -642,7 +654,12 @@ class DesktopGoogleAuthManager(
             }
             if (response.status.isSuccess()) {
                 val text = response.bodyAsText()
-                jsonParser.decodeFromString<DesktopGoogleUserInfo>(text)
+                val json = jsonParser.parseToJsonElement(text).jsonObject
+                val sub = json["sub"]?.jsonPrimitive?.content ?: ""
+                val name = json["name"]?.jsonPrimitive?.content ?: "AdMob Publisher"
+                val email = json["email"]?.jsonPrimitive?.content ?: ""
+                val picture = json["picture"]?.jsonPrimitive?.content
+                DesktopGoogleUserInfo(sub = sub, name = name, email = email, picture = picture)
             } else {
                 DesktopGoogleUserInfo()
             }
