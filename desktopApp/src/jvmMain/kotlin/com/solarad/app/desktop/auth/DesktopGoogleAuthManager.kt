@@ -24,6 +24,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.awt.Desktop
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.InetAddress
@@ -35,6 +36,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.time.Instant
 import java.util.Base64
 
 @Serializable
@@ -88,6 +90,14 @@ class DesktopGoogleAuthManager(
     private var pendingDeferred: CompletableDeferred<String>? = null
     private var activeServerSocket: ServerSocket? = null
 
+    private fun logDesktop(msg: String) {
+        println("[AdDash] $msg")
+        try {
+            val file = File(System.getProperty("user.home"), ".addash.log")
+            file.appendText("[${Instant.now()}] $msg\n")
+        } catch (_: Throwable) {}
+    }
+
     fun getClientId(): String {
         return System.getenv("ADDASH_CLIENT_ID")
             ?.takeIf { it.isNotBlank() }
@@ -113,12 +123,13 @@ class DesktopGoogleAuthManager(
             query.split("&")
                 .firstOrNull { it.startsWith("code=") }
                 ?.substringAfter("code=")
-                ?.let { URLDecoder.decode(it, StandardCharsets.UTF_8.name()) }
+                ?.let { URLDecoder.decode(it.replace("+", "%2B"), StandardCharsets.UTF_8.name()) }
                 ?: trimmed
         } else {
             trimmed
         }
 
+        logDesktop("Manual authorization code submitted (length: ${code.length})")
         pendingDeferred?.complete(code)
     }
 
@@ -174,12 +185,9 @@ class DesktopGoogleAuthManager(
                 _activeAuthUrl.value = authUrl
             }
 
-            // Always log clearly to console/terminal
-            println("\n" + "=".repeat(72))
-            println("  [AdDash] Google Sign-In Requested")
-            println("  Please open this link in your browser to authorize:")
-            println("  $authUrl")
-            println("=".repeat(72) + "\n")
+            logDesktop("Sign-in initiated with Client ID: ${getClientId()}")
+            logDesktop("Redirect URI: $redirectUri")
+            logDesktop("Auth URL: $authUrl")
 
             // 4. Try opening browser automatically
             openBrowserDirectly(authUrl)
@@ -190,7 +198,7 @@ class DesktopGoogleAuthManager(
                 try {
                     val result = awaitCallback(socket, state)
                     if (result.error != null) {
-                        println("[AdDash] OAuth Callback Error: ${result.error}")
+                        logDesktop("OAuth Callback Error: ${result.error}")
                         if (result.error == "redirect_uri_mismatch") {
                             onError("Google OAuth error: redirect_uri_mismatch. To authenticate, ensure 'http://127.0.0.1:$port$REDIRECT_PATH' is listed in your Google Cloud Console Authorized redirect URIs, or use a 'Desktop app' OAuth Client ID.")
                         } else {
@@ -198,6 +206,7 @@ class DesktopGoogleAuthManager(
                         }
                         deferred.cancel()
                     } else if (!result.code.isNullOrBlank()) {
+                        logDesktop("Captured authorization code from browser callback (length: ${result.code.length})")
                         deferred.complete(result.code)
                     }
                 } catch (e: Exception) {
@@ -215,29 +224,35 @@ class DesktopGoogleAuthManager(
             }
 
             if (authCode.isNullOrBlank()) {
+                logDesktop("Sign-in cancelled or timed out before receiving code.")
                 onError("Google Sign-In was cancelled or timed out.")
                 repository.setRefreshing(false)
                 return@withContext
             }
 
-            println("[AdDash] Exchanging authorization code for OAuth tokens...")
+            logDesktop("Exchanging authorization code for OAuth tokens...")
 
             // 7. Exchange code for access & refresh tokens
-            val tokenResponse = exchangeCodeForToken(
+            val tokenResult = exchangeCodeForToken(
                 code = authCode,
                 codeVerifier = codeVerifier,
                 redirectUri = redirectUri
             )
 
-            if (tokenResponse == null || tokenResponse.access_token.isBlank()) {
-                onError("Failed to exchange authorization code for an AdMob access token. Please verify network access.")
+            if (tokenResult.tokenResponse == null || tokenResult.tokenResponse.access_token.isBlank()) {
+                val detail = tokenResult.errorMessage ?: "Failed to exchange authorization code for an AdMob access token."
+                logDesktop("Token exchange failed: $detail")
+                onError("Sign-In failed: $detail")
                 repository.setRefreshing(false)
                 return@withContext
             }
 
+            val tokenResponse = tokenResult.tokenResponse
+
             // Save refresh token if provided
             tokenResponse.refresh_token?.let { refreshToken ->
                 repository.saveRefreshToken(refreshToken)
+                logDesktop("Saved refresh token successfully.")
             }
 
             // 8. Fetch user profile
@@ -246,7 +261,7 @@ class DesktopGoogleAuthManager(
             val email = userInfo.email.ifBlank { "" }
             val avatarUrl = userInfo.picture
 
-            println("✅ [AdDash] Successfully authenticated as $name ($email)")
+            logDesktop("Successfully authenticated as $name ($email)")
 
             // 9. Complete login via repository
             withContext(Dispatchers.Main) {
@@ -255,6 +270,7 @@ class DesktopGoogleAuthManager(
 
         } catch (e: Exception) {
             val message = e.localizedMessage ?: e.message ?: "Authentication error"
+            logDesktop("General exception during signIn: $message")
             onError("Google Sign-In failed: $message")
             repository.setRefreshing(false)
         } finally {
@@ -289,6 +305,7 @@ class DesktopGoogleAuthManager(
 
             val text = response.bodyAsText()
             if (!response.status.isSuccess()) {
+                logDesktop("Token refresh failed with HTTP ${response.status.value}: $text")
                 return@withContext null
             }
 
@@ -296,16 +313,19 @@ class DesktopGoogleAuthManager(
             val newAccessToken = json["access_token"]?.jsonPrimitive?.content
             if (!newAccessToken.isNullOrBlank()) {
                 repository.updateAccessToken(newAccessToken)
+                logDesktop("Silently renewed access token.")
                 return@withContext newAccessToken
             }
             null
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            logDesktop("Exception during token refresh: ${e.message}")
             null
         }
     }
 
     fun signOut() {
         repository.clearRefreshToken()
+        logDesktop("User signed out from desktop.")
     }
 
     // -------------------------------------------------------------------------
@@ -368,7 +388,6 @@ class DesktopGoogleAuthManager(
         val os = System.getProperty("os.name", "").lowercase()
         val isMac = os.contains("mac") || os.contains("darwin")
 
-        // 1. On macOS, try 'open' command first
         if (isMac) {
             try {
                 ProcessBuilder("/usr/bin/open", url).start()
@@ -376,7 +395,6 @@ class DesktopGoogleAuthManager(
             } catch (_: Throwable) {}
         }
 
-        // 2. On Linux, try command line launchers with environment first
         if (!isMac) {
             val linuxCommands = listOf(
                 listOf("xdg-open", url),
@@ -402,7 +420,6 @@ class DesktopGoogleAuthManager(
             }
         }
 
-        // 3. Fallback to Java AWT Desktop
         try {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                 Desktop.getDesktop().browse(URI(url))
@@ -416,57 +433,70 @@ class DesktopGoogleAuthManager(
     private data class CallbackResult(val code: String? = null, val error: String? = null)
 
     private fun awaitCallback(serverSocket: ServerSocket, expectedState: String): CallbackResult {
-        var client: Socket? = null
-        try {
-            client = serverSocket.accept()
-            val reader = BufferedReader(InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8))
-            val requestLine = reader.readLine() ?: return CallbackResult(error = "Empty request received")
+        while (!serverSocket.isClosed) {
+            var client: Socket? = null
+            try {
+                client = serverSocket.accept()
+                val reader = BufferedReader(InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8))
+                val requestLine = reader.readLine() ?: continue
 
-            val parts = requestLine.split(" ")
-            if (parts.size < 2) return CallbackResult(error = "Invalid HTTP request")
+                val parts = requestLine.split(" ")
+                if (parts.size < 2) {
+                    client.close()
+                    continue
+                }
 
-            val fullPath = parts[1]
-            val queryIndex = fullPath.indexOf('?')
-            val queryParams = mutableMapOf<String, String>()
+                val fullPath = parts[1]
+                if (fullPath.startsWith("/favicon.ico")) {
+                    client.close()
+                    continue
+                }
 
-            if (queryIndex != -1 && queryIndex < fullPath.length - 1) {
-                val query = fullPath.substring(queryIndex + 1)
-                for (pair in query.split("&")) {
-                    val eq = pair.indexOf('=')
-                    if (eq != -1) {
-                        val key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8.name())
-                        val value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8.name())
-                        queryParams[key] = value
+                val queryIndex = fullPath.indexOf('?')
+                val queryParams = mutableMapOf<String, String>()
+
+                if (queryIndex != -1 && queryIndex < fullPath.length - 1) {
+                    val query = fullPath.substring(queryIndex + 1)
+                    for (pair in query.split("&")) {
+                        val eq = pair.indexOf('=')
+                        if (eq != -1) {
+                            val rawKey = pair.substring(0, eq)
+                            val rawValue = pair.substring(eq + 1)
+                            val key = URLDecoder.decode(rawKey.replace("+", "%2B"), StandardCharsets.UTF_8.name())
+                            val value = URLDecoder.decode(rawValue.replace("+", "%2B"), StandardCharsets.UTF_8.name())
+                            queryParams[key] = value
+                        }
                     }
                 }
+
+                val error = queryParams["error"]
+                val code = queryParams["code"]
+                val state = queryParams["state"]
+
+                if (state != null && state != expectedState) {
+                    sendHtmlResponse(client, false, "Security verification failed (state mismatch).")
+                    return CallbackResult(error = "CSRF state token mismatch.")
+                }
+
+                if (error != null) {
+                    sendHtmlResponse(client, false, "Authentication error: $error")
+                    return CallbackResult(error = error)
+                }
+
+                if (!code.isNullOrBlank()) {
+                    sendHtmlResponse(client, true, "Authentication successful! You may close this tab and return to AdDash.")
+                    return CallbackResult(code = code)
+                }
+
+                sendHtmlResponse(client, false, "No authorization code found in callback.")
+                return CallbackResult(error = "Missing authorization code.")
+            } catch (e: Exception) {
+                if (serverSocket.isClosed) break
+            } finally {
+                try { client?.close() } catch (_: Exception) {}
             }
-
-            val error = queryParams["error"]
-            val code = queryParams["code"]
-            val state = queryParams["state"]
-
-            if (state != null && state != expectedState) {
-                sendHtmlResponse(client, false, "Security verification failed (state mismatch).")
-                return CallbackResult(error = "CSRF state token mismatch.")
-            }
-
-            if (error != null) {
-                sendHtmlResponse(client, false, "Authentication error: $error")
-                return CallbackResult(error = error)
-            }
-
-            if (code != null) {
-                sendHtmlResponse(client, true, "Authentication successful! You may close this tab and return to AdDash.")
-                return CallbackResult(code = code)
-            }
-
-            sendHtmlResponse(client, false, "No authorization code found in callback.")
-            return CallbackResult(error = "Missing authorization code.")
-        } finally {
-            try {
-                client?.close()
-            } catch (_: Exception) {}
         }
+        return CallbackResult(error = "Socket closed or timed out.")
     }
 
     private fun sendHtmlResponse(socket: Socket, isSuccess: Boolean, message: String) {
@@ -555,33 +585,53 @@ class DesktopGoogleAuthManager(
         } catch (_: Exception) {}
     }
 
+    private data class TokenResult(
+        val tokenResponse: GoogleTokenResponse? = null,
+        val errorMessage: String? = null
+    )
+
     private suspend fun exchangeCodeForToken(
         code: String,
         codeVerifier: String,
         redirectUri: String
-    ): GoogleTokenResponse? {
-        val response = httpClient.submitForm(
-            url = TOKEN_ENDPOINT,
-            formParameters = Parameters.build {
-                append("client_id", getClientId())
-                append("client_secret", getClientSecret())
-                append("code", code)
-                append("code_verifier", codeVerifier)
-                append("grant_type", "authorization_code")
-                append("redirect_uri", redirectUri)
-            }
-        )
-
-        val text = response.bodyAsText()
-        if (!response.status.isSuccess()) {
-            println("[AdDash] Token exchange failed with HTTP ${response.status.value}: $text")
-            return null
+    ): TokenResult {
+        val cleanCode = code.trim()
+        val formParams = Parameters.build {
+            append("client_id", getClientId())
+            append("client_secret", getClientSecret())
+            append("code", cleanCode)
+            append("code_verifier", codeVerifier)
+            append("grant_type", "authorization_code")
+            append("redirect_uri", redirectUri)
         }
 
         return try {
-            jsonParser.decodeFromString<GoogleTokenResponse>(text)
-        } catch (_: Exception) {
-            null
+            logDesktop("Submitting token exchange for code to $TOKEN_ENDPOINT...")
+            val response = httpClient.submitForm(
+                url = TOKEN_ENDPOINT,
+                formParameters = formParams
+            )
+
+            val text = response.bodyAsText()
+            logDesktop("Token endpoint response: HTTP ${response.status.value} -> $text")
+
+            if (!response.status.isSuccess()) {
+                val detail = try {
+                    val json = jsonParser.parseToJsonElement(text).jsonObject
+                    val err = json["error"]?.jsonPrimitive?.content ?: "error"
+                    val desc = json["error_description"]?.jsonPrimitive?.content
+                    if (desc != null) "$err: $desc" else err
+                } catch (_: Exception) {
+                    text
+                }
+                TokenResult(errorMessage = detail)
+            } else {
+                val token = jsonParser.decodeFromString<GoogleTokenResponse>(text)
+                TokenResult(tokenResponse = token)
+            }
+        } catch (e: Exception) {
+            logDesktop("Network exception during token exchange: ${e.message}")
+            TokenResult(errorMessage = "Network exception: ${e.message}")
         }
     }
 
