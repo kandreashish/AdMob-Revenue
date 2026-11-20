@@ -8,3 +8,6 @@
 .kotlin
 *.hprof
 .cxx/
+*.apk
+*.aab
+

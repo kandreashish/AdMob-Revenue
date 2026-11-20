@@ -12,7 +12,20 @@
           "package_name": "com.lavish.admob"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "623789927018-m1k6p5hujeic4j6qdjjme8tn7h9tsah4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lavish.admob",
+            "certificate_hash": "f30ba550eea883120bdfac682cf5266015fe842a"
+          }
+        },
+        {
+          "client_id": "623789927018-3g5s745ahi6epl46fihj4ukoelvkq9qp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAMNFw_bn_5kwZE8r8dBXoSrhZahgqYLl4"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "623789927018-3g5s745ahi6epl46fihj4ukoelvkq9qp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "623789927018-32jo2vaqls0u2n5tpssotlahnu37r6vf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.lavish.admob"
+              }
+            }
+          ]
         }
       }
     },
@@ -31,7 +56,20 @@
           "package_name": "com.lavish.admob.debug"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "623789927018-c48152hmsj20p7ul94gtkq7ubr34alm3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lavish.admob.debug",
+            "certificate_hash": "f30ba550eea883120bdfac682cf5266015fe842a"
+          }
+        },
+        {
+          "client_id": "623789927018-3g5s745ahi6epl46fihj4ukoelvkq9qp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAMNFw_bn_5kwZE8r8dBXoSrhZahgqYLl4"
@@ -39,7 +77,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "623789927018-3g5s745ahi6epl46fihj4ukoelvkq9qp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "623789927018-32jo2vaqls0u2n5tpssotlahnu37r6vf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.lavish.admob"
+              }
+            }
+          ]
         }
       }
     }

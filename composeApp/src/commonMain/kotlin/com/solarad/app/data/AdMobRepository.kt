@@ -1,378 +1,645 @@
 package com.solarad.app.data
 
+import com.russhwolf.settings.Settings
 import com.solarad.app.model.AccountSummary
-import com.solarad.app.model.AdFormatMetric
 import com.solarad.app.model.AnalyticsRange
 import com.solarad.app.model.AnalyticsSummary
 import com.solarad.app.model.AppMonetization
-import com.solarad.app.model.PastPayout
-import com.solarad.app.model.PlatformFilter
-import com.solarad.app.model.RevenuePoint
-import com.solarad.app.model.TerritoryYield
+import com.solarad.app.model.AutoRefreshInterval
+import com.solarad.app.model.ThemeMode
 import com.solarad.app.model.TimeRange
 import com.solarad.app.model.UserSession
 import com.solarad.app.model.WalletSummary
+import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class AdMobRepository(
+    private val settings: Settings? = createDefaultSettings(),
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default)
 ) {
+    companion object {
+        private const val KEY_IS_LOGGED_IN = "solarad_is_logged_in"
+        private const val KEY_USER_NAME = "solarad_user_name"
+        private const val KEY_USER_EMAIL = "solarad_user_email"
+        private const val KEY_PUBLISHER_ID = "solarad_publisher_id"
+        private const val KEY_ACCESS_TOKEN = "solarad_access_token"
+        private const val KEY_AUTO_REFRESH_INTERVAL = "solarad_auto_refresh_interval"
+        private const val KEY_THEME_MODE = "solarad_theme_mode"
+        private const val KEY_USER_AVATAR_URL = "solarad_user_avatar_url"
+        private const val KEY_CACHE_SUMMARY = "solarad_cache_summary"
+        private const val KEY_CACHE_ALL_APPS = "solarad_cache_all_apps"
+        private const val KEY_CACHE_ANALYTICS = "solarad_cache_analytics"
+        private const val KEY_CACHE_WALLET = "solarad_cache_wallet"
+        private const val KEY_CACHE_REPORT_ROWS = "solarad_cache_report_rows"
+        private const val KEY_CACHE_REGISTERED_APPS = "solarad_cache_registered_apps"
+        private const val KEY_CACHE_TIMESTAMP = "solarad_cache_timestamp"
+        private const val KEY_CUSTOM_DAILY_GOAL = "solarad_custom_daily_goal"
+    }
+
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
+
+    private inline fun <reified T> loadCachedList(key: String): List<T> {
+        val raw = settings?.getStringOrNull(key) ?: return emptyList()
+        return try {
+            json.decodeFromString<List<T>>(raw)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private inline fun <reified T> loadCachedObject(key: String, default: () -> T): T {
+        val raw = settings?.getStringOrNull(key) ?: return default()
+        return try {
+            json.decodeFromString<T>(raw)
+        } catch (_: Exception) {
+            default()
+        }
+    }
+
     private val apiClient = AdMobApiClient()
-    private var currentAccessToken: String? = null
+    private var currentAccessToken: String? = settings?.getStringOrNull(KEY_ACCESS_TOKEN)
+
+    private var cachedReportRows: List<AdMobReportRow> = loadCachedList(KEY_CACHE_REPORT_ROWS)
+    private val _reportRows = MutableStateFlow<List<AdMobReportRow>>(cachedReportRows)
+    val reportRows: StateFlow<List<AdMobReportRow>> = _reportRows.asStateFlow()
+
+    private var cachedRegisteredApps: List<AppMonetization> = loadCachedList(KEY_CACHE_REGISTERED_APPS)
+    private var activePublisherId: String = settings?.getString(KEY_PUBLISHER_ID, "") ?: ""
 
     private val _session = MutableStateFlow(
-        UserSession(
-            isLoggedIn = true,
-            userName = "Alex",
-            email = "alex.dev@gmail.com",
-            publisherId = "pub-9307144625788048"
-        )
+        if (settings?.getBoolean(KEY_IS_LOGGED_IN, false) == true) {
+            UserSession(
+                isLoggedIn = true,
+                userName = settings.getString(KEY_USER_NAME, "AdMob Publisher"),
+                email = settings.getString(KEY_USER_EMAIL, ""),
+                publisherId = settings.getString(KEY_PUBLISHER_ID, ""),
+                avatarUrl = settings.getStringOrNull(KEY_USER_AVATAR_URL)
+            )
+        } else {
+            UserSession(
+                isLoggedIn = false,
+                userName = "",
+                email = "",
+                publisherId = "",
+                avatarUrl = null
+            )
+        }
     )
     val session: StateFlow<UserSession> = _session.asStateFlow()
+
+    private val _authError = MutableStateFlow<String?>(null)
+    val authError: StateFlow<String?> = _authError.asStateFlow()
 
     private val _selectedTimeRange = MutableStateFlow(TimeRange.TODAY)
     val selectedTimeRange: StateFlow<TimeRange> = _selectedTimeRange.asStateFlow()
 
-    private val _accountSummary = MutableStateFlow(createInitialSummary(TimeRange.TODAY))
+    private val _customDailyGoal = MutableStateFlow<Double?>(
+        settings?.getDoubleOrNull(KEY_CUSTOM_DAILY_GOAL)?.takeIf { it > 0.0 }
+    )
+    val customDailyGoal: StateFlow<Double?> = _customDailyGoal.asStateFlow()
+
+    private val _accountSummary = MutableStateFlow(
+        loadCachedObject<AccountSummary>(KEY_CACHE_SUMMARY) { createEmptySummary() }
+    )
     val accountSummary: StateFlow<AccountSummary> = _accountSummary.asStateFlow()
 
-    private val _allApps = MutableStateFlow(createInitialApps())
+    private val _allApps = MutableStateFlow<List<AppMonetization>>(
+        loadCachedList(KEY_CACHE_ALL_APPS)
+    )
     val allApps: StateFlow<List<AppMonetization>> = _allApps.asStateFlow()
 
     private val _selectedAnalyticsRange = MutableStateFlow(AnalyticsRange.DAYS_7)
     val selectedAnalyticsRange: StateFlow<AnalyticsRange> = _selectedAnalyticsRange.asStateFlow()
 
-    private val _analytics = MutableStateFlow(createAnalytics(AnalyticsRange.DAYS_7))
+    private val _analytics = MutableStateFlow(
+        loadCachedObject<AnalyticsSummary>(KEY_CACHE_ANALYTICS) { createEmptyAnalytics() }
+    )
     val analytics: StateFlow<AnalyticsSummary> = _analytics.asStateFlow()
 
-    private val _wallet = MutableStateFlow(createInitialWallet())
+    private val _wallet = MutableStateFlow(
+        loadCachedObject<WalletSummary>(KEY_CACHE_WALLET) { createEmptyWallet() }
+    )
     val wallet: StateFlow<WalletSummary> = _wallet.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _isOffline = MutableStateFlow(false)
+    val isOffline: StateFlow<Boolean> = _isOffline.asStateFlow()
+
+    val hasOfflineCache: Boolean
+        get() = cachedReportRows.isNotEmpty() || _allApps.value.isNotEmpty()
+
+    private val _autoRefreshInterval = MutableStateFlow(
+        AutoRefreshInterval.fromSeconds(
+            settings?.getInt(KEY_AUTO_REFRESH_INTERVAL, AutoRefreshInterval.MINUTE_1.seconds)
+                ?: AutoRefreshInterval.MINUTE_1.seconds
+        )
+    )
+    val autoRefreshInterval: StateFlow<AutoRefreshInterval> = _autoRefreshInterval.asStateFlow()
+
+    private val _themeMode = MutableStateFlow(
+        ThemeMode.fromString(settings?.getStringOrNull(KEY_THEME_MODE))
+    )
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _lastRefreshTimestampMs = MutableStateFlow(
+        settings?.getLong(KEY_CACHE_TIMESTAMP, Clock.System.now().toEpochMilliseconds())
+            ?: Clock.System.now().toEpochMilliseconds()
+    )
+    val lastRefreshTimestampMs: StateFlow<Long> = _lastRefreshTimestampMs.asStateFlow()
+
     init {
-        // Live ticker: subtle updates every 15s to simulate real-time auction bidding
-        scope.launch {
-            while (true) {
-                delay(15000)
-                if (_session.value.isLoggedIn && _selectedTimeRange.value == TimeRange.TODAY) {
-                    val current = _accountSummary.value
-                    val increment = 0.35 + (0..10).random() * 0.05
-                    val newRev = current.todayRevenue + increment
-                    _accountSummary.value = current.copy(
-                        todayRevenue = ((newRev * 100).toLong() / 100.0),
-                        deltaAmount = current.deltaAmount + increment,
-                        impressions = current.impressions + (5..15).random()
-                    )
-                }
+        // If restored from persisted session with an access token, fetch real data in background
+        if (_session.value.isLoggedIn && !currentAccessToken.isNullOrBlank()) {
+            scope.launch {
+                val token = currentAccessToken ?: return@launch
+                fetchAndApplyRealData(token, _session.value.userName, _session.value.email)
             }
         }
     }
 
-    fun loginWithGoogle(token: String? = null) {
+    var tokenRefresher: (suspend () -> String?)? = null
+
+    fun getCurrentToken(): String? = currentAccessToken
+
+    fun updateAccessToken(newToken: String) {
+        val cleanToken = newToken.trim()
+        if (cleanToken.isNotBlank()) {
+            currentAccessToken = cleanToken
+            settings?.putString(KEY_ACCESS_TOKEN, cleanToken)
+            _authError.value = null
+        }
+    }
+
+    fun clearAuthError() {
+        _authError.value = null
+    }
+
+    fun setAuthError(message: String) {
+        _authError.value = message
+    }
+
+    fun setAutoRefreshInterval(interval: AutoRefreshInterval) {
+        _autoRefreshInterval.value = interval
+        settings?.putInt(KEY_AUTO_REFRESH_INTERVAL, interval.seconds)
+    }
+
+    fun setCustomDailyGoal(goal: Double?) {
+        if (goal != null && goal > 0.0) {
+            _customDailyGoal.value = goal
+            settings?.putDouble(KEY_CUSTOM_DAILY_GOAL, goal)
+        } else {
+            _customDailyGoal.value = null
+            settings?.remove(KEY_CUSTOM_DAILY_GOAL)
+        }
+        recomputeSummary()
+    }
+
+    private fun recomputeSummary() {
+        if (cachedReportRows.isNotEmpty()) {
+            val range = _selectedTimeRange.value
+            val summary = AdMobApiClient.computeAccountSummary(
+                rows = cachedReportRows,
+                range = range,
+                publisherId = activePublisherId.ifBlank { "AdMob" },
+                currencyCode = _session.value.currencyCode,
+                currencySymbol = _session.value.currencySymbol,
+                customStartDate = customStartDate,
+                customEndDate = customEndDate,
+                customDailyGoal = _customDailyGoal.value
+            )
+            _accountSummary.value = if (_isOffline.value) {
+                summary.copy(lastSyncTime = "Offline • Cached Data")
+            } else {
+                summary
+            }
+            _allApps.value = AdMobApiClient.computeAppsMonetization(
+                rows = cachedReportRows,
+                registeredApps = cachedRegisteredApps,
+                range = range,
+                customStartDate = customStartDate,
+                customEndDate = customEndDate
+            )
+            _analytics.value = AdMobApiClient.computeAnalytics(
+                rows = cachedReportRows,
+                range = _selectedAnalyticsRange.value
+            )
+        } else {
+            val current = _accountSummary.value
+            val isCustom = _customDailyGoal.value != null && _customDailyGoal.value!! > 0.0
+            val goalVal = if (isCustom) _customDailyGoal.value!! else 100.0
+            val progress = if (goalVal > 0.0 && current.todayRevenue > 0.0) {
+                (current.todayRevenue / goalVal).toFloat().coerceIn(0f, 1f)
+            } else 0f
+            _accountSummary.value = current.copy(
+                dailyGoal = goalVal,
+                dailyGoalProgress = progress,
+                isCustomGoal = isCustom
+            )
+        }
+        try {
+            settings?.putString(KEY_CACHE_SUMMARY, json.encodeToString(_accountSummary.value))
+            settings?.putString(KEY_CACHE_ALL_APPS, json.encodeToString(_allApps.value))
+            settings?.putString(KEY_CACHE_ANALYTICS, json.encodeToString(_analytics.value))
+        } catch (_: Exception) {}
+    }
+
+    fun recordRefreshTimestamp() {
+        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        _themeMode.value = mode
+        settings?.putString(KEY_THEME_MODE, mode.name)
+    }
+
+    fun updateAvatarUrl(avatarUrl: String) {
+        val cleanUrl = avatarUrl.trim()
+        if (cleanUrl.isNotBlank() && _session.value.avatarUrl != cleanUrl) {
+            _session.value = _session.value.copy(avatarUrl = cleanUrl)
+            settings?.putString(KEY_USER_AVATAR_URL, cleanUrl)
+        }
+    }
+
+    fun loginWithOAuthToken(name: String, email: String, token: String, avatarUrl: String? = null) {
+        val cleanToken = token.trim()
+        if (cleanToken.isBlank()) {
+            _authError.value = "OAuth authorization failed: Empty token received."
+            return
+        }
+
         _isRefreshing.value = true
+        _authError.value = null
+        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
+        currentAccessToken = cleanToken
+
+        val resolvedName = name.ifBlank { "AdMob Publisher" }
+        val resolvedEmail = email.ifBlank { "" }
+        val resolvedAvatar = avatarUrl ?: _session.value.avatarUrl
+
+        _session.value = UserSession(
+            isLoggedIn = true,
+            userName = resolvedName,
+            email = resolvedEmail,
+            publisherId = if (activePublisherId.isNotBlank()) activePublisherId else "Connecting AdMob...",
+            avatarUrl = resolvedAvatar
+        )
+
+        resolvedAvatar?.let { settings?.putString(KEY_USER_AVATAR_URL, it) }
+
         scope.launch {
-            if (!token.isNullOrBlank()) {
-                currentAccessToken = token
-                val realResult = apiClient.fetchRealAdMobData(token)
-                if (realResult.isSuccess) {
-                    val payload = realResult.getOrThrow()
-                    _session.value = payload.session
-                    _accountSummary.value = payload.accountSummary
-                    _allApps.value = payload.apps
-                    _analytics.value = payload.analytics
-                    _wallet.value = payload.wallet
+            try {
+                fetchAndApplyRealData(cleanToken, resolvedName, resolvedEmail, resolvedAvatar)
+            } catch (e: Exception) {
+                _authError.value = "AdMob API Error: ${e.message}"
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    fun loginWithGoogleProfile(name: String, email: String, idToken: String? = null, avatarUrl: String? = null) {
+        if (name.isBlank() && email.isBlank()) {
+            _authError.value = "Authentication cancelled or invalid Google account profile."
+            return
+        }
+
+        _isRefreshing.value = true
+        _authError.value = null
+        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
+        currentAccessToken = idToken
+
+        val resolvedName = name.ifBlank { "AdMob Publisher" }
+        val resolvedEmail = email.ifBlank { "" }
+        val resolvedAvatar = avatarUrl ?: _session.value.avatarUrl
+
+        _session.value = UserSession(
+            isLoggedIn = true,
+            userName = resolvedName,
+            email = resolvedEmail,
+            publisherId = if (activePublisherId.isNotBlank()) activePublisherId else "Connecting...",
+            avatarUrl = resolvedAvatar
+        )
+
+        settings?.apply {
+            putBoolean(KEY_IS_LOGGED_IN, true)
+            putString(KEY_USER_NAME, resolvedName)
+            putString(KEY_USER_EMAIL, resolvedEmail)
+            resolvedAvatar?.let { putString(KEY_USER_AVATAR_URL, it) }
+            if (!idToken.isNullOrBlank()) {
+                putString(KEY_ACCESS_TOKEN, idToken)
+            }
+        }
+
+        if (!idToken.isNullOrBlank()) {
+            scope.launch {
+                try {
+                    fetchAndApplyRealData(idToken, fallbackAvatarUrl = resolvedAvatar)
+                } catch (e: Exception) {
+                    _authError.value = "Connection error: ${e.message ?: "Authentication failed"}"
+                } finally {
                     _isRefreshing.value = false
-                    return@launch
                 }
             }
-
-            // Standard Google Sign-In profile
-            delay(600)
-            _session.value = UserSession(
-                isLoggedIn = true,
-                userName = "Ashish",
-                email = "k.ashish@blackbuck.com",
-                publisherId = "pub-623789927018001"
-            )
+        } else {
             _isRefreshing.value = false
         }
     }
 
     fun loginWithApiToken(token: String) {
+        val cleanToken = token.trim()
+        if (cleanToken.isBlank()) {
+            _authError.value = "Please enter a valid Google OAuth or API token."
+            return
+        }
+
         _isRefreshing.value = true
+        _authError.value = null
+        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
+
         scope.launch {
-            currentAccessToken = token
-            val realResult = apiClient.fetchRealAdMobData(token)
-            if (realResult.isSuccess) {
-                val payload = realResult.getOrThrow()
-                _session.value = payload.session
-                _accountSummary.value = payload.accountSummary
-                _allApps.value = payload.apps
-                _analytics.value = payload.analytics
-                _wallet.value = payload.wallet
-            } else {
-                _session.value = UserSession(
-                    isLoggedIn = true,
-                    userName = "AdMob Partner",
-                    email = "token-auth@admob.google",
-                    publisherId = "pub-623789927018001"
-                )
+            try {
+                currentAccessToken = cleanToken
+                fetchAndApplyRealData(cleanToken, "AdMob Developer", "")
+            } catch (e: Exception) {
+                currentAccessToken = null
+                _authError.value = "Authentication failed: ${e.message ?: "Network error"}"
+            } finally {
+                _isRefreshing.value = false
             }
-            _isRefreshing.value = false
+        }
+    }
+
+    private fun saveToOfflineCache(payload: RealAdMobPayload, token: String) {
+        settings?.apply {
+            putBoolean(KEY_IS_LOGGED_IN, true)
+            putString(KEY_USER_NAME, payload.session.userName)
+            putString(KEY_USER_EMAIL, payload.session.email)
+            putString(KEY_PUBLISHER_ID, payload.session.publisherId)
+            putString(KEY_ACCESS_TOKEN, token)
+            payload.session.avatarUrl?.let { putString(KEY_USER_AVATAR_URL, it) }
+
+            try {
+                putString(KEY_CACHE_SUMMARY, json.encodeToString(payload.accountSummary))
+                putString(KEY_CACHE_ALL_APPS, json.encodeToString(payload.apps))
+                putString(KEY_CACHE_ANALYTICS, json.encodeToString(payload.analytics))
+                putString(KEY_CACHE_WALLET, json.encodeToString(payload.wallet))
+                putString(KEY_CACHE_REPORT_ROWS, json.encodeToString(payload.reportRows))
+                putString(KEY_CACHE_REGISTERED_APPS, json.encodeToString(payload.registeredApps))
+                putLong(KEY_CACHE_TIMESTAMP, Clock.System.now().toEpochMilliseconds())
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun isNetworkFailure(e: Throwable?): Boolean {
+        if (e == null) return false
+        val msg = (e.message ?: "").lowercase()
+        val name = e::class.simpleName?.lowercase() ?: ""
+        return msg.contains("network") ||
+               msg.contains("timeout") ||
+               msg.contains("connect") ||
+               msg.contains("unreachable") ||
+               msg.contains("offline") ||
+               msg.contains("failed to connect") ||
+               msg.contains("resolve host") ||
+               msg.contains("unknownhost") ||
+               msg.contains("socket") ||
+               name.contains("socket") ||
+               name.contains("connect") ||
+               name.contains("host") ||
+               name.contains("ioexception")
+    }
+
+    private fun isAuthExpiredError(msg: String): Boolean {
+        val lower = msg.lowercase()
+        return lower.contains("401") ||
+               lower.contains("unauthorized") ||
+               lower.contains("invalid authentication credentials") ||
+               lower.contains("auth_token_stale") ||
+               lower.contains("token expired") ||
+               lower.contains("invalid_token") ||
+               lower.contains("expected oauth 2 access token")
+    }
+
+    private suspend fun fetchAndApplyRealData(
+        token: String,
+        fallbackName: String = "",
+        fallbackEmail: String = "",
+        fallbackAvatarUrl: String? = null
+    ) {
+        val resolvedName = fallbackName.ifBlank { _session.value.userName }
+        val resolvedEmail = fallbackEmail.ifBlank { _session.value.email }
+        val resolvedAvatar = fallbackAvatarUrl ?: _session.value.avatarUrl
+        val realResult = apiClient.fetchRealAdMobData(
+            accessToken = token,
+            fallbackName = resolvedName,
+            fallbackEmail = resolvedEmail,
+            fallbackAvatarUrl = resolvedAvatar,
+            customDailyGoal = _customDailyGoal.value
+        )
+        if (realResult.isSuccess) {
+            val payload = realResult.getOrThrow()
+            cachedReportRows = payload.reportRows
+            _reportRows.value = payload.reportRows
+            cachedRegisteredApps = payload.registeredApps
+            activePublisherId = payload.primaryPublisherId
+
+            _session.value = payload.session
+            _wallet.value = payload.wallet
+            _isOffline.value = false
+            _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
+
+            // Recompute active summary, apps breakdown, and analytics to preserve user's selected ranges!
+            recomputeSummary()
+
+            saveToOfflineCache(payload, token)
+        } else {
+            val ex = realResult.exceptionOrNull()
+            val err = ex?.message ?: "AdMob API request failed"
+
+            // If token expired, try refreshing silently via tokenRefresher
+            if (isAuthExpiredError(err) && tokenRefresher != null) {
+                try {
+                    val freshToken = tokenRefresher?.invoke()
+                    if (!freshToken.isNullOrBlank() && freshToken != token) {
+                        updateAccessToken(freshToken)
+                        fetchAndApplyRealData(freshToken, fallbackName, fallbackEmail, fallbackAvatarUrl)
+                        return
+                    }
+                } catch (_: Exception) {}
+            }
+
+            if (hasOfflineCache && isNetworkFailure(ex)) {
+                _isOffline.value = true
+                _authError.value = null
+            } else {
+                _authError.value = err
+            }
+        }
+    }
+
+    fun refreshRealData() {
+        val token = currentAccessToken
+        if (token.isNullOrBlank()) {
+            _authError.value = "No active OAuth session. Please tap Sign In."
+            return
+        }
+        _isRefreshing.value = true
+        _authError.value = null
+        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
+        scope.launch {
+            try {
+                fetchAndApplyRealData(token, _session.value.userName, _session.value.email, _session.value.avatarUrl)
+            } catch (e: Exception) {
+                if (hasOfflineCache && isNetworkFailure(e)) {
+                    _isOffline.value = true
+                    _authError.value = null
+                    recomputeSummary()
+                } else {
+                    _authError.value = "Refresh error: ${e.message}"
+                }
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 
     fun logout() {
         currentAccessToken = null
+        cachedReportRows = emptyList()
+        _reportRows.value = emptyList()
+        cachedRegisteredApps = emptyList()
+        activePublisherId = ""
+
+        settings?.apply {
+            putBoolean(KEY_IS_LOGGED_IN, false)
+            remove(KEY_USER_NAME)
+            remove(KEY_USER_EMAIL)
+            remove(KEY_PUBLISHER_ID)
+            remove(KEY_ACCESS_TOKEN)
+            remove(KEY_USER_AVATAR_URL)
+            remove(KEY_CACHE_SUMMARY)
+            remove(KEY_CACHE_ALL_APPS)
+            remove(KEY_CACHE_ANALYTICS)
+            remove(KEY_CACHE_WALLET)
+            remove(KEY_CACHE_REPORT_ROWS)
+            remove(KEY_CACHE_REGISTERED_APPS)
+            remove(KEY_CACHE_TIMESTAMP)
+            remove(KEY_CUSTOM_DAILY_GOAL)
+        }
+        _customDailyGoal.value = null
         _session.value = UserSession(
             isLoggedIn = false,
             userName = "",
             email = "",
-            publisherId = ""
+            publisherId = "",
+            avatarUrl = null
         )
+        _accountSummary.value = createEmptySummary()
+        _allApps.value = emptyList()
+        _analytics.value = createEmptyAnalytics()
+        _wallet.value = createEmptyWallet()
+        _authError.value = null
+        _isOffline.value = false
     }
 
-    fun setTimeRange(range: TimeRange) {
+    private var customStartDate: kotlinx.datetime.LocalDate? = null
+    private var customEndDate: kotlinx.datetime.LocalDate? = null
+
+    fun setTimeRange(
+        range: TimeRange,
+        customStart: kotlinx.datetime.LocalDate? = null,
+        customEnd: kotlinx.datetime.LocalDate? = null
+    ) {
         _selectedTimeRange.value = range
-        _accountSummary.value = createInitialSummary(range)
+        if (range == TimeRange.CUSTOM) {
+            if (customStart != null) customStartDate = customStart
+            if (customEnd != null) customEndDate = customEnd
+        }
+        recomputeSummary()
     }
 
     fun setAnalyticsRange(range: AnalyticsRange) {
         _selectedAnalyticsRange.value = range
-        _analytics.value = createAnalytics(range)
-    }
-
-    fun refresh() {
-        scope.launch {
-            _isRefreshing.value = true
-            val token = currentAccessToken
-            if (!token.isNullOrBlank()) {
-                val realResult = apiClient.fetchRealAdMobData(token)
-                if (realResult.isSuccess) {
-                    val payload = realResult.getOrThrow()
-                    _accountSummary.value = payload.accountSummary
-                    _allApps.value = payload.apps
-                    _analytics.value = payload.analytics
-                    _wallet.value = payload.wallet
-                    _isRefreshing.value = false
-                    return@launch
-                }
-            }
-
-            delay(600)
-            _accountSummary.value = createInitialSummary(_selectedTimeRange.value)
-            _allApps.value = createInitialApps()
-            _analytics.value = createAnalytics(_selectedAnalyticsRange.value)
-            _wallet.value = createInitialWallet()
-            _isRefreshing.value = false
-        }
+        recomputeSummary()
     }
 
     fun addApp(name: String, platform: String) {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) return
+
         val newApp = AppMonetization(
-            id = "app-${_allApps.value.size + 1}",
-            name = name,
-            category = "Utilities",
+            id = "app-local-${_allApps.value.size + 1}",
+            name = cleanName,
+            category = "Mobile App",
             platform = platform,
-            todayRevenue = 120.40,
-            deltaVsYesterday = 15.2,
-            totalImpressions = 12500,
-            fillRate = 97.4,
-            avgEcpm = 14.80,
-            formats = listOf(
-                AdFormatMetric("Rewarded Video", 72.24, 24.50, 2900, 98.2, 60.0),
-                AdFormatMetric("Interstitial", 36.12, 16.20, 2200, 97.5, 30.0),
-                AdFormatMetric("Banner", 12.04, 3.80, 7400, 96.5, 10.0)
-            )
+            todayRevenue = 0.0,
+            deltaVsYesterday = 0.0,
+            totalImpressions = 0,
+            fillRate = 0.0,
+            avgEcpm = 0.0,
+            formats = emptyList()
         )
-        _allApps.value = _allApps.value + newApp
+        val updated = _allApps.value + newApp
+        _allApps.value = updated
+        try {
+            settings?.putString(KEY_CACHE_ALL_APPS, json.encodeToString(updated))
+        } catch (_: Exception) {}
     }
 
-    private fun createInitialSummary(range: TimeRange): AccountSummary {
-        return when (range) {
-            TimeRange.TODAY -> AccountSummary(
-                todayRevenue = 1842.60,
-                yesterdayRevenue = 1480.20,
-                deltaAmount = 362.40,
-                deltaPercentage = 24.5,
-                dailyGoal = 2000.0,
-                dailyGoalProgress = 0.92f,
-                ecpm = 18.40,
-                impressions = 142800,
-                fillRate = 99.4,
-                lastSyncTime = "Live • 2:45 PM"
-            )
-            TimeRange.YESTERDAY -> AccountSummary(
-                todayRevenue = 1480.20,
-                yesterdayRevenue = 1320.00,
-                deltaAmount = 160.20,
-                deltaPercentage = 12.1,
-                dailyGoal = 2000.0,
-                dailyGoalProgress = 0.74f,
-                ecpm = 16.90,
-                impressions = 128400,
-                fillRate = 99.1,
-                lastSyncTime = "Finalized"
-            )
-            TimeRange.THIS_MONTH -> AccountSummary(
-                todayRevenue = 34820.50,
-                yesterdayRevenue = 29400.00,
-                deltaAmount = 5420.50,
-                deltaPercentage = 18.4,
-                dailyGoal = 45000.0,
-                dailyGoalProgress = 0.77f,
-                ecpm = 17.85,
-                impressions = 2480000,
-                fillRate = 99.5,
-                lastSyncTime = "Month to Date"
-            )
-        }
-    }
-
-    private fun createInitialApps(): List<AppMonetization> {
-        return listOf(
-            AppMonetization(
-                id = "app_1",
-                name = "CyberDrift",
-                category = "Game • Racing",
-                platform = "iOS",
-                todayRevenue = 890.40,
-                deltaVsYesterday = 120.00,
-                totalImpressions = 28218,
-                fillRate = 99.8,
-                avgEcpm = 31.57,
-                formats = listOf(
-                    AdFormatMetric("Rewarded Video", 520.00, 38.40, 13540, 99.8, 58.4),
-                    AdFormatMetric("Interstitial", 280.00, 22.10, 12660, 99.2, 31.4),
-                    AdFormatMetric("App Open Ad", 90.40, 44.80, 2018, 97.4, 10.2)
-                )
-            ),
-            AppMonetization(
-                id = "app_2",
-                name = "FocusAI",
-                category = "Productivity • AI",
-                platform = "iOS",
-                todayRevenue = 612.00,
-                deltaVsYesterday = 85.00,
-                totalImpressions = 38400,
-                fillRate = 99.5,
-                avgEcpm = 15.93,
-                formats = listOf(
-                    AdFormatMetric("Rewarded Video", 310.00, 28.50, 10880, 99.6, 50.7),
-                    AdFormatMetric("Native", 210.00, 14.20, 14790, 99.5, 34.3),
-                    AdFormatMetric("Banner", 92.00, 7.20, 12730, 99.4, 15.0)
-                )
-            ),
-            AppMonetization(
-                id = "app_3",
-                name = "ZenBlocks",
-                category = "Casual • Puzzle",
-                platform = "Android",
-                todayRevenue = 340.20,
-                deltaVsYesterday = 25.00,
-                totalImpressions = 76200,
-                fillRate = 99.2,
-                avgEcpm = 4.46,
-                formats = listOf(
-                    AdFormatMetric("Interstitial", 210.00, 8.40, 25000, 99.3, 61.7),
-                    AdFormatMetric("Banner", 130.20, 2.54, 51200, 99.1, 38.3)
-                )
-            )
+    private fun createEmptySummary(): AccountSummary {
+        val isCustom = _customDailyGoal.value != null && _customDailyGoal.value!! > 0.0
+        val goalVal = if (isCustom) _customDailyGoal.value!! else 100.0
+        return AccountSummary(
+            todayRevenue = 0.0,
+            yesterdayRevenue = 0.0,
+            deltaAmount = 0.0,
+            deltaPercentage = 0.0,
+            dailyGoal = goalVal,
+            dailyGoalProgress = 0f,
+            ecpm = 0.0,
+            impressions = 0,
+            fillRate = 0.0,
+            lastSyncTime = "Syncing...",
+            isCustomGoal = isCustom
         )
     }
 
-    private fun createAnalytics(range: AnalyticsRange): AnalyticsSummary {
-        return when (range) {
-            AnalyticsRange.DAYS_7 -> AnalyticsSummary(
-                periodLabel = "7-Day Revenue",
-                totalRevenue = 11480.20,
-                deltaPercent = 18.4,
-                avgEcpm = 18.40,
-                totalImpressions = 642500,
-                trendPoints = listOf(
-                    RevenuePoint("Mon", 1420.00),
-                    RevenuePoint("Tue", 1510.00),
-                    RevenuePoint("Wed", 1490.00),
-                    RevenuePoint("Thu", 1680.00),
-                    RevenuePoint("Fri", 1720.00),
-                    RevenuePoint("Sat", 1817.60),
-                    RevenuePoint("Sun", 1842.60, isCurrentOrPeak = true)
-                ),
-                territories = listOf(
-                    TerritoryYield("🇺🇸", "United States", 6210.00, 54.1),
-                    TerritoryYield("🇯🇵", "Japan", 2520.00, 22.0),
-                    TerritoryYield("🇩🇪", "Germany", 1490.00, 13.0),
-                    TerritoryYield("🇬🇧", "United Kingdom", 810.00, 7.0),
-                    TerritoryYield("🌐", "Rest of World", 450.20, 3.9)
-                )
-            )
-            AnalyticsRange.DAYS_30 -> AnalyticsSummary(
-                periodLabel = "30-Day Revenue",
-                totalRevenue = 48210.00,
-                deltaPercent = 22.1,
-                avgEcpm = 17.90,
-                totalImpressions = 2690000,
-                trendPoints = listOf(
-                    RevenuePoint("W1", 10200.00),
-                    RevenuePoint("W2", 11800.00),
-                    RevenuePoint("W3", 12400.00),
-                    RevenuePoint("W4", 13810.00, isCurrentOrPeak = true)
-                ),
-                territories = listOf(
-                    TerritoryYield("🇺🇸", "United States", 26500.00, 55.0),
-                    TerritoryYield("🇯🇵", "Japan", 10600.00, 22.0),
-                    TerritoryYield("🇩🇪", "Germany", 6200.00, 12.9),
-                    TerritoryYield("🇬🇧", "United Kingdom", 3400.00, 7.1),
-                    TerritoryYield("🌐", "Rest of World", 1510.00, 3.0)
-                )
-            )
-            AnalyticsRange.DAYS_90 -> AnalyticsSummary(
-                periodLabel = "90-Day Revenue",
-                totalRevenue = 139400.00,
-                deltaPercent = 31.8,
-                avgEcpm = 17.50,
-                totalImpressions = 7965000,
-                trendPoints = listOf(
-                    RevenuePoint("Sep", 41200.00),
-                    RevenuePoint("Oct", 48900.00),
-                    RevenuePoint("Nov", 49300.00, isCurrentOrPeak = true)
-                ),
-                territories = listOf(
-                    TerritoryYield("🇺🇸", "United States", 76600.00, 54.9),
-                    TerritoryYield("🇯🇵", "Japan", 30600.00, 21.9),
-                    TerritoryYield("🇩🇪", "Germany", 18100.00, 13.0),
-                    TerritoryYield("🇬🇧", "United Kingdom", 9800.00, 7.0),
-                    TerritoryYield("🌐", "Rest of World", 4300.00, 3.2)
-                )
-            )
-        }
+    private fun createEmptyAnalytics(): AnalyticsSummary {
+        return AnalyticsSummary(
+            periodLabel = "Past 7 Days",
+            totalRevenue = 0.0,
+            deltaPercent = 0.0,
+            avgEcpm = 0.0,
+            totalImpressions = 0,
+            trendPoints = emptyList(),
+            territories = emptyList()
+        )
     }
 
-    private fun createInitialWallet(): WalletSummary {
+    private fun createEmptyWallet(): WalletSummary {
         return WalletSummary(
-            unpaidBalance = 4890.20,
+            unpaidBalance = 0.0,
             thresholdAmount = 100.00,
-            thresholdPercent = 1.0f,
-            nextDisbursementDate = "Nov 21",
-            daysRemaining = 2,
-            bankAccountTitle = "Primary Checking Account",
-            bankAccountMasked = "•••• 8912",
-            isBankVerified = true,
-            adServingStatus = "100% Normal / Uncapped",
+            thresholdPercent = 0f,
+            nextDisbursementDate = "21st of next month",
+            daysRemaining = 0,
+            bankAccountTitle = "Google AdSense Payout",
+            bankAccountMasked = "Awaiting Setup",
+            isBankVerified = false,
+            adServingStatus = "Ready to Monetize",
             policyIssuesCount = 0,
-            pastPayouts = listOf(
-                PastPayout("pay_1", "Oct 2026", 4120.80, "Deposited Oct 21", "Paid"),
-                PastPayout("pay_2", "Sep 2026", 3890.40, "Deposited Sep 21", "Paid"),
-                PastPayout("pay_3", "Aug 2026", 3612.00, "Deposited Aug 21", "Paid")
-            )
+            pastPayouts = emptyList()
         )
     }
 }

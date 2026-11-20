@@ -22,13 +22,13 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
-            resValue("string", "app_name", "SolarAd")
+            resValue("string", "app_name", "AdCash")
         }
         getByName("debug") {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            resValue("string", "app_name", "SolarAd Dev")
+            resValue("string", "app_name", "AdCash")
         }
     }
 
@@ -50,5 +50,6 @@ android {
 dependencies {
     implementation(project(":composeApp"))
     implementation(libs.androidx.activity.compose)
-    implementation(libs.compose.material3)
+    implementation(libs.androidx.core.splashscreen)
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
 }

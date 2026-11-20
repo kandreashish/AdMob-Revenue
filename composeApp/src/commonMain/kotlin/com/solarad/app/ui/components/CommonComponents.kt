@@ -1,31 +1,35 @@
 package com.solarad.app.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Today
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.Apps
@@ -48,6 +52,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.solarad.app.model.AdFormatMetric
@@ -55,7 +61,7 @@ import com.solarad.app.model.RevenuePoint
 import com.solarad.app.theme.BorderMedium
 import com.solarad.app.theme.BorderSubtle
 import com.solarad.app.theme.BotanicalGreen
-import com.solarad.app.theme.BotanicalGreenLight
+import com.solarad.app.theme.CoralCrimson
 import com.solarad.app.theme.EspressoSlate
 import com.solarad.app.theme.FormatAppOpen
 import com.solarad.app.theme.FormatBanner
@@ -68,73 +74,75 @@ import com.solarad.app.theme.OceanAzure
 import com.solarad.app.theme.OceanAzureLight
 import com.solarad.app.theme.PureWhite
 import com.solarad.app.theme.SolarAmber
-import com.solarad.app.theme.SolarAmberLight
+import com.solarad.app.theme.SolarTheme
 
 @Composable
 fun SolarHeader(
     title: String,
     subtitle: String,
     accountName: String? = null,
-    onAccountClick: (() -> Unit)? = null
+    avatarUrl: String? = null,
+    isOffline: Boolean = false,
+    onAccountClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
             Text(
                 text = title,
-                fontSize = 24.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = EspressoSlate
+                color = SolarTheme.colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Box(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(BotanicalGreen)
+                        .background(if (isOffline) SolarAmber else BotanicalGreen)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = subtitle,
-                    fontSize = 13.sp,
-                    color = MutedSlate,
-                    fontWeight = FontWeight.Medium
+                    fontSize = 12.sp,
+                    color = SolarTheme.colors.textSecondary,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        if (accountName != null) {
+        if (onAccountClick != null) {
             Surface(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .border(1.dp, BorderMedium, RoundedCornerShape(999.dp))
-                    .clickable(enabled = onAccountClick != null) { onAccountClick?.invoke() },
-                color = PureWhite,
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, SolarTheme.colors.borderMedium, CircleShape)
+                    .clickable { onAccountClick() },
+                color = SolarTheme.colors.surface,
                 shadowElevation = 1.dp
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(SolarAmber)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = accountName,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = EspressoSlate
-                    )
-                }
+                UserProfileAvatar(
+                    avatarUrl = avatarUrl,
+                    userName = accountName ?: "",
+                    modifier = Modifier.fillMaxSize(),
+                    iconSize = 20.dp
+                )
             }
         }
     }
@@ -148,38 +156,52 @@ fun <T> SolarPillTabs(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(Color(0xFFF1EFEA))
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(999.dp),
+        color = SolarTheme.colors.surfaceVariant
     ) {
-        items.forEach { item ->
-            val isSelected = item == selectedItem
-            val bgColor by animateColorAsState(if (isSelected) SolarAmber else Color.Transparent)
-            val textColor by animateColorAsState(if (isSelected) PureWhite else MutedSlate)
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(bgColor)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onSelect(item) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = labelProvider(item),
-                    fontSize = 13.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = textColor
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { item ->
+                val isSelected = item == selectedItem
+                val bgColor by animateColorAsState(if (isSelected) SolarAmber else Color.Transparent)
+                val textColor by animateColorAsState(
+                    if (isSelected) {
+                        if (SolarTheme.colors.isDark) EspressoSlate else PureWhite
+                    } else {
+                        SolarTheme.colors.textSecondary
+                    }
                 )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(bgColor)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onSelect(item) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = labelProvider(item),
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = textColor,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
@@ -198,16 +220,16 @@ fun MetricTwinCard(
         modifier = modifier
             .shadow(
                 elevation = 2.dp,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(18.dp),
                 ambientColor = SolarAmber.copy(alpha = 0.08f),
                 spotColor = Color.Black.copy(alpha = 0.04f)
             )
-            .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp)),
-        color = PureWhite,
-        shape = RoundedCornerShape(20.dp)
+            .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(18.dp)),
+        color = SolarTheme.colors.cardBackground,
+        shape = RoundedCornerShape(18.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -216,53 +238,59 @@ fun MetricTwinCard(
             ) {
                 Text(
                     text = label,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MutedSlate
+                    color = SolarTheme.colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 if (icon != null) {
+                    Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         tint = OceanAzure,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = value,
-                fontSize = 24.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = EspressoSlate
+                color = SolarTheme.colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Surface(
-                color = if (isPositive) OceanAzureLight else LinenSand,
+                color = if (isPositive) SolarTheme.colors.secondaryContainer else SolarTheme.colors.surfaceVariant,
                 shape = RoundedCornerShape(999.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (isPositive) {
-                        Icon(
-                            imageVector = Icons.Default.TrendingUp,
-                            contentDescription = null,
-                            tint = OceanAzure,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                    }
+                    Icon(
+                        imageVector = if (isPositive) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
+                        contentDescription = null,
+                        tint = if (isPositive) OceanAzure else SolarTheme.colors.textSecondary,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = subBadge,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isPositive) OceanAzure else MutedSlate
+                        color = if (isPositive) OceanAzure else SolarTheme.colors.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -275,6 +303,15 @@ fun FormatSegmentedBar(
     formats: List<AdFormatMetric>,
     modifier: Modifier = Modifier
 ) {
+    if (formats.isEmpty()) {
+        Text(
+            text = "No ad unit breakdown recorded",
+            fontSize = 11.sp,
+            color = SolarTheme.colors.textSecondary
+        )
+        return
+    }
+
     val totalRevenue = formats.sumOf { it.revenue }.coerceAtLeast(0.01)
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -282,9 +319,9 @@ fun FormatSegmentedBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(10.dp)
+                .height(8.dp)
                 .clip(RoundedCornerShape(999.dp))
-                .background(Color(0xFFEDE8E1))
+                .background(SolarTheme.colors.surfaceVariant)
         ) {
             formats.forEach { format ->
                 val weight = (format.revenue / totalRevenue).toFloat().coerceAtLeast(0.02f)
@@ -298,16 +335,16 @@ fun FormatSegmentedBar(
                 Box(
                     modifier = Modifier
                         .weight(weight)
-                        .height(10.dp)
+                        .height(8.dp)
                         .background(color)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Format metric pills
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             formats.forEach { format ->
                 val color = when {
                     format.formatName.contains("Rewarded", ignoreCase = true) -> FormatRewarded
@@ -321,34 +358,41 @@ fun FormatSegmentedBar(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(8.dp)
+                                .size(7.dp)
                                 .clip(CircleShape)
                                 .background(color)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = format.formatName,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = EspressoSlate
+                            color = SolarTheme.colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "$${format.revenue}",
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = EspressoSlate
+                            color = SolarTheme.colors.textPrimary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "eCPM $${format.ecpm}",
-                            fontSize = 11.sp,
-                            color = MutedSlate
+                            fontSize = 10.sp,
+                            color = SolarTheme.colors.textSecondary
                         )
                     }
                 }
@@ -362,22 +406,34 @@ fun RevenueCurveChart(
     points: List<RevenuePoint>,
     modifier: Modifier = Modifier
 ) {
-    if (points.isEmpty()) return
+    if (points.isEmpty()) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(100.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("No revenue trends in this period", fontSize = 12.sp, color = MutedSlate)
+        }
+        return
+    }
 
     val maxAmount = points.maxOfOrNull { it.amount } ?: 1.0
     val minAmount = (points.minOfOrNull { it.amount } ?: 0.0) * 0.85
+    val range = (maxAmount - minAmount).coerceAtLeast(1.0)
+    val dotCenterColor = SolarTheme.colors.cardBackground
 
     Column(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(140.dp)
         ) {
             Canvas(modifier = Modifier.matchParentSize()) {
                 val width = size.width
                 val height = size.height
-                val bottomPadding = 24.dp.toPx()
-                val usableHeight = height - bottomPadding
+                val bottomPadding = 20.dp.toPx()
+                val usableHeight = (height - bottomPadding).coerceAtLeast(1f)
 
                 if (points.size < 2) return@Canvas
 
@@ -387,7 +443,11 @@ fun RevenueCurveChart(
 
                 val coords = points.mapIndexed { index, point ->
                     val x = index * stepX
-                    val normalized = ((point.amount - minAmount) / (maxAmount - minAmount)).toFloat()
+                    val normalized = if (maxAmount > minAmount) {
+                        ((point.amount - minAmount) / range).toFloat().coerceIn(0f, 1f)
+                    } else {
+                        0.5f
+                    }
                     val y = usableHeight - (normalized * (usableHeight * 0.75f))
                     Offset(x, y)
                 }
@@ -429,31 +489,28 @@ fun RevenueCurveChart(
                 drawPath(
                     path = path,
                     color = SolarAmber,
-                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
                 )
 
                 // Highlight peak/current point
                 coords.forEachIndexed { idx, pt ->
                     if (points[idx].isCurrentOrPeak) {
                         drawCircle(
-                            color = PureWhite,
-                            radius = 6.dp.toPx(),
+                            color = dotCenterColor,
+                            radius = 5.dp.toPx(),
                             center = pt
                         )
                         drawCircle(
                             color = SolarAmber,
-                            radius = 4.dp.toPx(),
-                            center = pt
-                        )
-                        drawCircle(
-                            color = SolarAmber.copy(alpha = 0.3f),
-                            radius = 10.dp.toPx(),
+                            radius = 3.5.dp.toPx(),
                             center = pt
                         )
                     }
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         // X-axis Day labels
         Row(
@@ -463,9 +520,10 @@ fun RevenueCurveChart(
             points.forEach { pt ->
                 Text(
                     text = pt.dayLabel,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = if (pt.isCurrentOrPeak) FontWeight.Bold else FontWeight.Medium,
-                    color = if (pt.isCurrentOrPeak) SolarAmber else MutedSlate
+                    color = if (pt.isCurrentOrPeak) SolarAmber else SolarTheme.colors.textSecondary,
+                    maxLines = 1
                 )
             }
         }
@@ -487,50 +545,58 @@ fun SolarBottomDock(
 ) {
     Surface(
         modifier = modifier
-            .padding(horizontal = 24.dp, vertical = 14.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
             .shadow(
-                elevation = 12.dp,
+                elevation = 8.dp,
                 shape = RoundedCornerShape(999.dp),
                 ambientColor = SolarAmber.copy(alpha = 0.15f),
                 spotColor = Color.Black.copy(alpha = 0.08f)
             )
-            .border(1.dp, BorderSubtle, RoundedCornerShape(999.dp)),
-        color = PureWhite,
+            .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(999.dp)),
+        color = SolarTheme.colors.bottomDockBackground,
         shape = RoundedCornerShape(999.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            NavigationTab.values().forEach { tab ->
+            NavigationTab.entries.forEach { tab ->
                 val isSelected = tab == currentTab
                 val tabBgColor by animateColorAsState(if (isSelected) SolarAmber else Color.Transparent)
-                val iconTint by animateColorAsState(if (isSelected) PureWhite else MutedSlate)
+                val iconTint by animateColorAsState(
+                    if (isSelected) {
+                        if (SolarTheme.colors.isDark) EspressoSlate else PureWhite
+                    } else {
+                        SolarTheme.colors.textSecondary
+                    }
+                )
 
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
                         .background(tabBgColor)
                         .clickable { onTabSelected(tab) }
-                        .padding(horizontal = if (isSelected) 14.dp else 10.dp, vertical = 8.dp),
+                        .padding(horizontal = if (isSelected) 10.dp else 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = if (isSelected) tab.activeIcon else tab.inactiveIcon,
                         contentDescription = tab.label,
                         tint = iconTint,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     if (isSelected) {
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = tab.label,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = PureWhite
+                            color = if (SolarTheme.colors.isDark) EspressoSlate else PureWhite,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

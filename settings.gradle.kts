@@ -1,4 +1,4 @@
-rootProject.name = "SolarAd"
+rootProject.name = "AdCash"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

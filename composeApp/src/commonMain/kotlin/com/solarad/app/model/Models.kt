@@ -2,10 +2,22 @@ package com.solarad.app.model
 
 import kotlinx.serialization.Serializable
 
-enum class TimeRange(val label: String) {
-    TODAY("Today"),
-    YESTERDAY("Yesterday"),
-    THIS_MONTH("This Month")
+enum class TimeRange(
+    val label: String,
+    val title: String,
+    val description: String
+) {
+    TODAY("td", "Today", "Live real-time earnings"),
+    YESTERDAY("yd", "Yesterday", "Finalized daily earnings"),
+    LAST_7_DAYS("7d", "Last 7 Days", "Past 7 days performance"),
+    DAYS_30("30d", "Last 30 Days", "Past 30 days performance"),
+    CUSTOM("custom", "Custom Range", "Custom selected date range");
+
+    val shortLabel: String get() = label
+
+    companion object {
+        val THIS_MONTH get() = DAYS_30
+    }
 }
 
 enum class AnalyticsRange(val label: String) {
@@ -18,6 +30,20 @@ enum class PlatformFilter(val label: String) {
     ALL("All Platforms"),
     IOS("iOS"),
     ANDROID("Android")
+}
+
+enum class AutoRefreshInterval(val seconds: Int, val label: String) {
+    OFF(0, "Off"),
+    SECONDS_30(30, "30s"),
+    MINUTE_1(60, "1 min"),
+    MINUTES_2(120, "2 min"),
+    MINUTES_5(300, "5 min");
+
+    companion object {
+        fun fromSeconds(seconds: Int): AutoRefreshInterval {
+            return entries.find { it.seconds == seconds } ?: MINUTE_1
+        }
+    }
 }
 
 @Serializable
@@ -41,7 +67,7 @@ data class AppMonetization(
     val totalImpressions: Int,
     val fillRate: Double,
     val avgEcpm: Double,
-    val formats: List<AdFormatMetric>
+    val formats: List<AdFormatMetric> = emptyList()
 )
 
 @Serializable
@@ -55,7 +81,12 @@ data class AccountSummary(
     val ecpm: Double,
     val impressions: Int,
     val fillRate: Double,
-    val lastSyncTime: String
+    val lastSyncTime: String,
+    val currencyCode: String = "USD",
+    val currencySymbol: String = "$",
+    val ctr: Double = 0.0,
+    val clicks: Int = 0,
+    val isCustomGoal: Boolean = false
 )
 
 @Serializable
@@ -113,5 +144,41 @@ data class UserSession(
     val isLoggedIn: Boolean,
     val userName: String,
     val email: String,
-    val publisherId: String
+    val publisherId: String,
+    val avatarUrl: String? = null,
+    val currencyCode: String = "USD",
+    val currencySymbol: String = "$"
 )
+
+enum class ThemeMode(val label: String) {
+    SYSTEM("System"),
+    LIGHT("Light"),
+    DARK("Dark");
+
+    companion object {
+        fun fromString(value: String?): ThemeMode =
+            entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: SYSTEM
+    }
+}
+
+fun maskPublisherId(publisherId: String): String {
+    val clean = publisherId.trim()
+    if (clean.isBlank()) return ""
+    if (clean.startsWith("Connecting", ignoreCase = true)) return clean
+
+    val prefix = when {
+        clean.startsWith("ca-app-pub-", ignoreCase = true) -> clean.take(11)
+        clean.startsWith("accounts/pub-", ignoreCase = true) -> clean.take(13)
+        clean.startsWith("pub-", ignoreCase = true) -> clean.take(4)
+        else -> ""
+    }
+    val body = clean.substring(prefix.length)
+    if (body.isEmpty()) return clean
+
+    // Dash the second half of the ID
+    val keepCount = (body.length + 1) / 2
+    val dashCount = body.length - keepCount
+    return prefix + body.take(keepCount) + "-".repeat(dashCount)
+}
+
+
