@@ -65,19 +65,24 @@ fi
 
 DIST_TAR="$ROOT_DIR/desktopApp/build/distributions/addash-1.0.0-raspberry-pi-arm64.tar.gz"
 
-# Force rebuild if requested, if tar is missing, or if source files are newer than the tar
+COMMIT_FILE="$ROOT_DIR/desktopApp/build/.built_commit"
+CURRENT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo "unknown")"
+LAST_COMMIT="$(cat "$COMMIT_FILE" 2>/dev/null || echo "none")"
+
+# Force rebuild if requested, if tar is missing, or if git commit has changed
 SHOULD_REBUILD=false
-if [ "$REBUILD_FLAG" = true ] || [ "$1" = "--rebuild" ] || [ ! -f "$DIST_TAR" ]; then
-    SHOULD_REBUILD=true
-elif [ -d "$ROOT_DIR/desktopApp/src" ] && [ "$ROOT_DIR/desktopApp/src" -nt "$DIST_TAR" ]; then
+if [ "$REBUILD_FLAG" = true ] || [ "$1" = "--rebuild" ] || [ ! -f "$DIST_TAR" ] || [ "$CURRENT_COMMIT" != "$LAST_COMMIT" ]; then
     SHOULD_REBUILD=true
 fi
 
 if [ "$SHOULD_REBUILD" = true ]; then
-    echo "Building fresh standalone bundle..."
+    echo "🔨 Building fresh standalone bundle for Raspberry Pi (commit ${CURRENT_COMMIT:0:7})..."
     rm -rf "$ROOT_DIR/run_pi"
+    rm -f "$DIST_TAR"
     chmod +x gradlew
     ./gradlew :desktopApp:packageRaspberryPiTar
+    mkdir -p "$ROOT_DIR/desktopApp/build"
+    echo "$CURRENT_COMMIT" > "$COMMIT_FILE"
 fi
 
 echo "Extracting bundle..."
