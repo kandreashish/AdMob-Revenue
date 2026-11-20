@@ -27,6 +27,7 @@ kotlin {
             implementation("org.jetbrains.compose.desktop:desktop-jvm-linux-arm64:${libs.versions.composeMultiplatform.get()}")
             implementation("org.jetbrains.compose.desktop:desktop-jvm-linux-x64:${libs.versions.composeMultiplatform.get()}")
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.coroutines.swing)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.ktor.client.content.negotiation)
