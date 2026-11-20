@@ -9,6 +9,29 @@ cd "$ROOT_DIR"
 
 echo "=== AdDash Raspberry Pi Runner ==="
 
+# Parse command-line flags
+REBUILD_FLAG=false
+for arg in "$@"; do
+    case "$arg" in
+        --rebuild)
+            REBUILD_FLAG=true
+            ;;
+        :*)
+            export DISPLAY="$arg"
+            ;;
+        --screen=*)
+            export ADDASH_SCREEN="${arg#*=}"
+            ;;
+        --screen)
+            # Will be handled with next arg if passed
+            ;;
+    esac
+done
+
+if [ "$1" = "--screen" ] && [ -n "$2" ]; then
+    export ADDASH_SCREEN="$2"
+fi
+
 # Auto-detect display environment if running over SSH
 if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
     if [ -S "/tmp/.X11-unix/X0" ]; then
@@ -29,6 +52,9 @@ if [ -z "$XDG_RUNTIME_DIR" ] && [ -d "/run/user/$(id -u)" ]; then
 fi
 
 echo "Using DISPLAY=$DISPLAY"
+if [ -n "$ADDASH_SCREEN" ]; then
+    echo "Target Screen Index: $ADDASH_SCREEN"
+fi
 
 # Check Java 17+
 if ! command -v java >/dev/null 2>&1; then
@@ -41,7 +67,7 @@ DIST_TAR="$ROOT_DIR/desktopApp/build/distributions/addash-1.0.0-raspberry-pi-arm
 
 # Force rebuild if requested, if tar is missing, or if source files are newer than the tar
 SHOULD_REBUILD=false
-if [ "$1" = "--rebuild" ] || [ ! -f "$DIST_TAR" ]; then
+if [ "$REBUILD_FLAG" = true ] || [ "$1" = "--rebuild" ] || [ ! -f "$DIST_TAR" ]; then
     SHOULD_REBUILD=true
 elif [ -d "$ROOT_DIR/desktopApp/src" ] && [ "$ROOT_DIR/desktopApp/src" -nt "$DIST_TAR" ]; then
     SHOULD_REBUILD=true

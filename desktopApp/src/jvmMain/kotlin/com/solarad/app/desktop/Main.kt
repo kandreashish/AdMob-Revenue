@@ -39,6 +39,8 @@ import com.solarad.app.theme.SolarAmber
 import com.solarad.app.theme.SolarTheme
 import kotlinx.coroutines.launch
 import java.awt.Dimension
+import java.awt.GraphicsEnvironment
+import androidx.compose.ui.window.WindowPosition
 
 fun main() {
     val osName = System.getProperty("os.name").orEmpty().lowercase()
@@ -55,9 +57,46 @@ fun main() {
     }
 
     application {
-        val windowState = rememberWindowState(width = 1120.dp, height = 780.dp)
+        val (windowPosition, windowSize) = remember {
+            try {
+                val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                val screens = ge.screenDevices
+                val screenIdx = System.getenv("ADDASH_SCREEN")?.toIntOrNull() ?: 0
+                val targetScreen = screens.getOrNull(screenIdx) ?: screens.firstOrNull()
 
-    Window(
+                if (screens.size > 1) {
+                    println("[AdDash] Multi-monitor setup detected (${screens.size} screens):")
+                    screens.forEachIndexed { i, s ->
+                        val b = s.defaultConfiguration.bounds
+                        val marker = if (s == targetScreen) " -> [ACTIVE]" else ""
+                        println("  • Screen $i: ${b.width}x${b.height} at (${b.x}, ${b.y})$marker")
+                    }
+                    println("[AdDash] Tip: To target a specific screen, set ADDASH_SCREEN=0 or ADDASH_SCREEN=1")
+                }
+
+                if (targetScreen != null) {
+                    val bounds = targetScreen.defaultConfiguration.bounds
+                    val width = minOf(1120, maxOf(480, bounds.width - 40)).dp
+                    val height = minOf(780, maxOf(500, bounds.height - 60)).dp
+                    val posX = (bounds.x + (bounds.width - width.value.toInt()) / 2).dp
+                    val posY = (bounds.y + (bounds.height - height.value.toInt()) / 2).dp
+                    Pair(WindowPosition.Absolute(posX, posY), Pair(width, height))
+                } else {
+                    Pair(WindowPosition.PlatformDefault, Pair(1120.dp, 780.dp))
+                }
+            } catch (t: Throwable) {
+                println("[AdDash] Notice: Could not detect multi-screen layout: ${t.message}")
+                Pair(WindowPosition.PlatformDefault, Pair(1120.dp, 780.dp))
+            }
+        }
+
+        val windowState = rememberWindowState(
+            position = windowPosition,
+            width = windowSize.first,
+            height = windowSize.second
+        )
+
+        Window(
         onCloseRequest = ::exitApplication,
         title = "AdDash - AdMob Dashboard",
         state = windowState,
