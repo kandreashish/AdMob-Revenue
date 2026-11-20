@@ -50,6 +50,7 @@ replay_pid*
 
 # Packaging & Distribution Artifacts (Desktop / Linux / macOS)
 *.deb
+!addash_1.0.0_arm64.deb
 *.rpm
 *.dmg
 *.pkg

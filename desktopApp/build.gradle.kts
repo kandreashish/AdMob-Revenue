@@ -68,7 +68,12 @@ val prepareRaspberryPiLibs by tasks.registering(Sync::class) {
     val jvmRuntimeClasspath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles
     val jvmJar = tasks.named("jvmJar", org.gradle.jvm.tasks.Jar::class)
 
-    from(jvmRuntimeClasspath)
+    from(jvmRuntimeClasspath) {
+        // Exclude non-ARM64 native libraries from Raspberry Pi package
+        exclude("**/skiko-awt-runtime-macos-*")
+        exclude("**/skiko-awt-runtime-linux-x64-*")
+        exclude("**/skiko-awt-runtime-windows-*")
+    }
     from(jvmJar.map { it.archiveFile })
     into(layout.buildDirectory.dir("pi-libs"))
 }
