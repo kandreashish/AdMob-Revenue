@@ -40,8 +40,22 @@ import com.solarad.app.theme.SolarTheme
 import kotlinx.coroutines.launch
 import java.awt.Dimension
 
-fun main() = application {
-    val windowState = rememberWindowState(width = 1120.dp, height = 780.dp)
+fun main() {
+    val osName = System.getProperty("os.name").orEmpty().lowercase()
+    val arch = System.getProperty("os.arch").orEmpty().lowercase()
+    val isLinux = osName.contains("linux")
+    val isArm = arch.contains("aarch64") || arch.contains("arm")
+
+    // On Linux ARM (Raspberry Pi 4/5), default to SOFTWARE_FAST rendering if not specified,
+    // avoiding the known Skiko OpenGL freeze/hang on VideoCore VI / Mesa drivers.
+    if (isLinux && isArm) {
+        if (System.getProperty("skiko.renderApi") == null && System.getenv("SKIKO_RENDER_API") == null) {
+            System.setProperty("skiko.renderApi", "SOFTWARE_FAST")
+        }
+    }
+
+    application {
+        val windowState = rememberWindowState(width = 1120.dp, height = 780.dp)
 
     Window(
         onCloseRequest = ::exitApplication,
@@ -195,4 +209,5 @@ fun main() = application {
             )
         }
     }
+}
 }

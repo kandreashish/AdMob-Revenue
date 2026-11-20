@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import com.solarad.app.model.AppMonetization
 import com.solarad.app.model.PlatformFilter
+import com.solarad.app.ui.components.AppIcon
 import com.solarad.app.theme.BorderMedium
 import com.solarad.app.theme.BorderSubtle
 import com.solarad.app.theme.BotanicalGreen
@@ -233,21 +234,7 @@ fun AppsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.weight(1f, fill = false)
                             ) {
-                                val isIos = app.platform.equals("iOS", ignoreCase = true)
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isIos) SolarTheme.colors.secondaryContainer else SolarTheme.colors.successContainer),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (isIos) Icons.Default.PhoneIphone else Icons.Default.PhoneAndroid,
-                                        contentDescription = null,
-                                        tint = if (isIos) OceanAzure else BotanicalGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                AppIcon(app = app, size = 36.dp)
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f, fill = false)) {
                                     Text(

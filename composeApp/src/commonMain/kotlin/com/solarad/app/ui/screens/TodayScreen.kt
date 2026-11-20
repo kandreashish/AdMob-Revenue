@@ -87,6 +87,7 @@ import com.solarad.app.theme.SolarAmber
 import com.solarad.app.theme.SolarAmberGlow
 import com.solarad.app.theme.SolarAmberLight
 import com.solarad.app.theme.SolarTheme
+import com.solarad.app.ui.components.AppIcon
 import com.solarad.app.ui.components.MetricTwinCard
 import com.solarad.app.ui.components.SetGoalDialog
 import com.solarad.app.ui.components.SolarHeader
@@ -529,36 +530,8 @@ fun TodayScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f, fill = false)
                         ) {
-                            // Dynamic App Icon based on platform
-                            val iconBg = if (app.platform.equals("iOS", ignoreCase = true)) {
-                                SolarTheme.colors.secondaryContainer
-                            } else {
-                                SolarTheme.colors.successContainer
-                            }
-                            val iconTint = if (app.platform.equals("iOS", ignoreCase = true)) {
-                                OceanAzure
-                            } else {
-                                BotanicalGreen
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(iconBg),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (app.platform.equals("iOS", ignoreCase = true)) {
-                                        Icons.Default.PhoneIphone
-                                    } else {
-                                        Icons.Default.PhoneAndroid
-                                    },
-                                    contentDescription = null,
-                                    tint = iconTint,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                            // Real Store Icon with graceful Monogram fallback
+                            AppIcon(app = app, size = 38.dp)
 
                             Spacer(modifier = Modifier.width(10.dp))
 

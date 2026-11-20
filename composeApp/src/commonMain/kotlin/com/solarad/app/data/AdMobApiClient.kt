@@ -159,7 +159,9 @@ class AdMobApiClient(
                 val platformStr = appObj["platform"]?.jsonPrimitive?.content ?: "ANDROID"
                 val platform = if (platformStr.equals("IOS", ignoreCase = true)) "iOS" else "Android"
                 val manualTitle = appObj["manualAppInfo"]?.jsonObject?.get("displayName")?.jsonPrimitive?.content
-                val linkedTitle = appObj["linkedAppInfo"]?.jsonObject?.get("displayName")?.jsonPrimitive?.content
+                val linkedAppInfo = appObj["linkedAppInfo"]?.jsonObject
+                val linkedTitle = linkedAppInfo?.get("displayName")?.jsonPrimitive?.content
+                val appStoreId = linkedAppInfo?.get("appStoreId")?.jsonPrimitive?.content
                 val title = linkedTitle ?: manualTitle ?: "AdMob App #${index + 1}"
 
                 AppMonetization(
@@ -172,7 +174,9 @@ class AdMobApiClient(
                     totalImpressions = 0,
                     fillRate = 0.0,
                     avgEcpm = 0.0,
-                    formats = emptyList()
+                    formats = emptyList(),
+                    appStoreId = appStoreId,
+                    iconUrl = null
                 )
             }
         } else {
@@ -863,7 +867,9 @@ class AdMobApiClient(
                         totalImpressions = totalImp,
                         fillRate = if (totalImp > 0) 99.2 else 0.0,
                         avgEcpm = avgEcpm,
-                        formats = formats
+                        formats = formats,
+                        appStoreId = matchedRegApp?.appStoreId,
+                        iconUrl = matchedRegApp?.iconUrl
                     )
                 )
             }

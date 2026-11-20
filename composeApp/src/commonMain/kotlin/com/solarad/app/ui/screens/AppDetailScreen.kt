@@ -71,6 +71,7 @@ import com.solarad.app.data.AdMobApiClient
 import com.solarad.app.data.AdMobReportRow
 import com.solarad.app.model.AppMonetization
 import com.solarad.app.model.TimeRange
+import com.solarad.app.ui.components.AppIcon
 import com.solarad.app.theme.BotanicalGreen
 import com.solarad.app.theme.EspressoSlate
 import com.solarad.app.theme.OceanAzure
@@ -430,13 +431,8 @@ fun AppDetailScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (isIos) Icons.Default.PhoneIphone else Icons.Default.PhoneAndroid,
-                                contentDescription = null,
-                                tint = if (isIos) OceanAzure else BotanicalGreen,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            AppIcon(app = app, size = 26.dp, showPlatformBadge = false)
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = app.name,
                                 fontSize = 17.sp,

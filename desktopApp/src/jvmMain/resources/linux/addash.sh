@@ -36,7 +36,8 @@ else
     exit 1
 fi
 
-# Optimization flags for Raspberry Pi / ARM Linux
-JAVA_OPTS="-Xms64m -Xmx512m -Dskiko.renderApi=OPENGL"
+# Rendering API: on Raspberry Pi / ARM Linux, default to SOFTWARE_FAST to avoid OpenGL/Mesa driver hangs
+RENDER_API="${SKIKO_RENDER_API:-SOFTWARE_FAST}"
+JAVA_OPTS="-Xms64m -Xmx512m -Dskiko.renderApi=$RENDER_API"
 
 exec "$JAVA_EXEC" $JAVA_OPTS -cp "$APP_HOME/lib/*" com.solarad.app.desktop.MainKt "$@"

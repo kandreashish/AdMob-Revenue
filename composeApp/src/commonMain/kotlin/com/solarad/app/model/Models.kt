@@ -67,7 +67,9 @@ data class AppMonetization(
     val totalImpressions: Int,
     val fillRate: Double,
     val avgEcpm: Double,
-    val formats: List<AdFormatMetric> = emptyList()
+    val formats: List<AdFormatMetric> = emptyList(),
+    val appStoreId: String? = null,
+    val iconUrl: String? = null
 )
 
 @Serializable

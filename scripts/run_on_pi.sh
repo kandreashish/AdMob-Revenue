@@ -58,5 +58,6 @@ echo "Extracting bundle..."
 mkdir -p "$ROOT_DIR/run_pi"
 tar -xzf "$DIST_TAR" -C "$ROOT_DIR/run_pi"
 
-echo "Launching AdDash..."
+echo "Launching AdDash (Software Fast rendering)..."
+export SKIKO_RENDER_API="${SKIKO_RENDER_API:-SOFTWARE_FAST}"
 exec "$ROOT_DIR/run_pi/addash/bin/addash" "$@"
