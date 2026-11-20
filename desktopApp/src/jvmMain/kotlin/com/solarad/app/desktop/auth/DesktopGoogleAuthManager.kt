@@ -59,7 +59,8 @@ class DesktopGoogleAuthManager(
     private val repository: AdMobRepository
 ) {
     companion object {
-        const val DEFAULT_CLIENT_ID = "623789927018-3g5s745ahi6epl46fihj4ukoelvkq9qp.apps.googleusercontent.com"
+        const val DEFAULT_CLIENT_ID = "623789927018-as6q5ju7q7j35vop4ba2m4f4f8pqb5b1.apps.googleusercontent.com"
+        const val DEFAULT_CLIENT_SECRET = "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"
         const val DEFAULT_PORT = 8585
         const val REDIRECT_PATH = "/oauth2callback"
         const val AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -92,6 +93,12 @@ class DesktopGoogleAuthManager(
             ?.takeIf { it.isNotBlank() }
             ?: repository.getCustomClientId()
             ?: DEFAULT_CLIENT_ID
+    }
+
+    fun getClientSecret(): String {
+        return System.getenv("ADDASH_CLIENT_SECRET")
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_CLIENT_SECRET
     }
 
     /**
@@ -274,6 +281,7 @@ class DesktopGoogleAuthManager(
                 url = TOKEN_ENDPOINT,
                 formParameters = Parameters.build {
                     append("client_id", getClientId())
+                    append("client_secret", getClientSecret())
                     append("refresh_token", storedRefreshToken)
                     append("grant_type", "refresh_token")
                 }
@@ -556,6 +564,7 @@ class DesktopGoogleAuthManager(
             url = TOKEN_ENDPOINT,
             formParameters = Parameters.build {
                 append("client_id", getClientId())
+                append("client_secret", getClientSecret())
                 append("code", code)
                 append("code_verifier", codeVerifier)
                 append("grant_type", "authorization_code")
