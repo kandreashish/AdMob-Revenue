@@ -9,6 +9,27 @@ cd "$ROOT_DIR"
 
 echo "=== AdDash Raspberry Pi Runner ==="
 
+# Auto-detect display environment if running over SSH
+if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
+    if [ -S "/tmp/.X11-unix/X0" ]; then
+        export DISPLAY=":0"
+    elif [ -S "/tmp/.X11-unix/X1" ]; then
+        export DISPLAY=":1"
+    else
+        export DISPLAY=":0"
+    fi
+fi
+
+if [ -z "$XAUTHORITY" ] && [ -f "$HOME/.Xauthority" ]; then
+    export XAUTHORITY="$HOME/.Xauthority"
+fi
+
+if [ -z "$XDG_RUNTIME_DIR" ] && [ -d "/run/user/$(id -u)" ]; then
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+fi
+
+echo "Using DISPLAY=$DISPLAY"
+
 # Check Java 17+
 if ! command -v java >/dev/null 2>&1; then
     echo "Java not found. Installing Java 17 (default-jre)..."
