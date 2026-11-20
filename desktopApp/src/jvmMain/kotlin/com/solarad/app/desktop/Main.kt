@@ -40,6 +40,7 @@ import com.solarad.app.theme.SolarTheme
 import kotlinx.coroutines.launch
 import java.awt.Dimension
 import java.awt.GraphicsEnvironment
+import java.awt.MouseInfo
 import androidx.compose.ui.window.WindowPosition
 
 fun main() {
@@ -61,8 +62,13 @@ fun main() {
             try {
                 val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
                 val screens = ge.screenDevices
-                val screenIdx = System.getenv("ADDASH_SCREEN")?.toIntOrNull() ?: 0
-                val targetScreen = screens.getOrNull(screenIdx) ?: screens.firstOrNull()
+                val mouseDevice = try { MouseInfo.getPointerInfo()?.device } catch (_: Throwable) { null }
+                val explicitIdx = System.getenv("ADDASH_SCREEN")?.toIntOrNull()
+                val targetScreen = if (explicitIdx != null) {
+                    screens.getOrNull(explicitIdx) ?: screens.firstOrNull()
+                } else {
+                    mouseDevice ?: screens.firstOrNull()
+                }
 
                 if (screens.size > 1) {
                     println("[AdDash] Multi-monitor setup detected (${screens.size} screens):")
@@ -76,10 +82,11 @@ fun main() {
 
                 if (targetScreen != null) {
                     val bounds = targetScreen.defaultConfiguration.bounds
-                    val width = minOf(1120, maxOf(480, bounds.width - 40)).dp
-                    val height = minOf(780, maxOf(500, bounds.height - 60)).dp
-                    val posX = (bounds.x + (bounds.width - width.value.toInt()) / 2).dp
-                    val posY = (bounds.y + (bounds.height - height.value.toInt()) / 2).dp
+                    val isSmallScreen = bounds.width <= 1024 || bounds.height <= 600
+                    val width = if (isSmallScreen) (bounds.width - 10).dp else minOf(1120, maxOf(400, bounds.width - 40)).dp
+                    val height = if (isSmallScreen) (bounds.height - 35).dp else minOf(780, maxOf(440, bounds.height - 60)).dp
+                    val posX = (bounds.x + maxOf(0, (bounds.width - width.value.toInt()) / 2)).dp
+                    val posY = (bounds.y + maxOf(0, (bounds.height - height.value.toInt()) / 2)).dp
                     Pair(WindowPosition.Absolute(posX, posY), Pair(width, height))
                 } else {
                     Pair(WindowPosition.PlatformDefault, Pair(1120.dp, 780.dp))
@@ -102,7 +109,7 @@ fun main() {
         state = windowState,
         icon = painterResource("icons/icon.png")
     ) {
-        window.minimumSize = Dimension(420, 560)
+        window.minimumSize = Dimension(320, 360)
 
         val repository = remember { AdMobRepository() }
         val authManager = remember(repository) { DesktopGoogleAuthManager(repository) }
