@@ -45,8 +45,8 @@ actual fun PlatformLandscapeEffect(enabled: Boolean, keepScreenOn: Boolean) {
             }
 
             onDispose {
-                // Restore previous orientation & system bars
-                activity.requestedOrientation = originalOrientation
+                // Explicitly rotate the screen back to portrait when returning
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
                 if (keepScreenOn) {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

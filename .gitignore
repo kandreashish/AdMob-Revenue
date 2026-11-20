@@ -1,13 +1,99 @@
-*.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
-/build
-*/build
-.kotlin
-*.hprof
-.cxx/
-*.apk
-*.aab
+# ==============================================================================
+# Git Ignore for Kotlin Multiplatform (Android, iOS, Desktop/JVM)
+# ==============================================================================
 
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Linux
+*~
+
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Kotlin & Kotlin Multiplatform
+.kotlin/
+kotlin-js-store/
+.konan/
+*.konan
+
+# Local configuration & environment
+local.properties
+local.settings.json
+*.local
+
+# Android / JVM Build Artifacts & Caches
+.cxx/
+captures/
+output-metadata.json
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# Packaging & Distribution Artifacts (Desktop / Linux / macOS)
+*.deb
+*.rpm
+*.dmg
+*.pkg
+*.exe
+*.msi
+dist/
+
+# Signing keys & Keystores (Security)
+*.keystore
+*.jks
+*.p12
+*.key
+*.mobileprovision
+*.cer
+*.p8
+signing.properties
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# iOS / Xcode
+**/DerivedData/
+*.xcuserstate
+project.xcworkspace/
+xcuserdata/
+**/xcuserdata/
+*.xcuserdatad
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.ipa
+*.dSYM/
+*.dSYM.zip
+*.hmap
+Pods/
+
+# Log files
+*.log

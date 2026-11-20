@@ -1,0 +1,10 @@
+Package: solarad
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: arm64
+Maintainer: SolarAd <support@solarad.app>
+Depends: default-jre (>= 2:1.17) | openjdk-17-jre | openjdk-21-jre
+Description: SolarAd - Real-Time AdMob Analytics & Earnings Dashboard
+ SolarAd is a multiplatform dashboard designed for monitoring Google AdMob
+ performance, revenue metrics, and monetization analytics.
