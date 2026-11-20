@@ -198,6 +198,17 @@ class AdMobRepository(
         settings?.remove(KEY_REFRESH_TOKEN)
     }
 
+    fun getCustomClientId(): String? = settings?.getStringOrNull("solarad_custom_client_id")
+
+    fun saveCustomClientId(id: String) {
+        val clean = id.trim()
+        if (clean.isNotBlank()) {
+            settings?.putString("solarad_custom_client_id", clean)
+        } else {
+            settings?.remove("solarad_custom_client_id")
+        }
+    }
+
     fun clearAuthError() {
         _authError.value = null
     }

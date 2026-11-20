@@ -88,7 +88,10 @@ class DesktopGoogleAuthManager(
     private var activeServerSocket: ServerSocket? = null
 
     fun getClientId(): String {
-        return DEFAULT_CLIENT_ID
+        return System.getenv("ADDASH_CLIENT_ID")
+            ?.takeIf { it.isNotBlank() }
+            ?: repository.getCustomClientId()
+            ?: DEFAULT_CLIENT_ID
     }
 
     /**
