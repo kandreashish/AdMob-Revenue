@@ -38,8 +38,14 @@ ssh -t "$PI_TARGET" bash -s << 'EOF'
     echo "Installing AdDash debian package..."
     sudo dpkg -i ~/addash_1.0.0_arm64.deb || sudo apt --fix-broken install -y
 
+    if [ -d "$HOME/Desktop" ]; then
+        cp -f /usr/share/applications/addash.desktop "$HOME/Desktop/AdDash.desktop"
+        chmod +x "$HOME/Desktop/AdDash.desktop"
+        command -v gio >/dev/null 2>&1 && gio set "$HOME/Desktop/AdDash.desktop" metadata::trusted true >/dev/null 2>&1 || true
+    fi
+
     echo "✅ AdDash successfully installed on Raspberry Pi!"
-    echo "To launch AdDash on your Pi desktop screen, run:"
+    echo "Double click 'AdDash' on your desktop, select from Applications Menu, or run:"
     echo "  DISPLAY=:0 addash &"
 EOF
 
