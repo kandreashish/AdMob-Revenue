@@ -22,6 +22,8 @@ kotlin {
         jvmMain.dependencies {
             implementation(project(":composeApp"))
             implementation(compose.desktop.currentOs)
+            implementation(compose.material3)
+            implementation(compose.foundation)
             implementation("org.jetbrains.compose.desktop:desktop-jvm-linux-arm64:${libs.versions.composeMultiplatform.get()}")
             implementation("org.jetbrains.compose.desktop:desktop-jvm-linux-x64:${libs.versions.composeMultiplatform.get()}")
             implementation(libs.kotlinx.coroutines.core)

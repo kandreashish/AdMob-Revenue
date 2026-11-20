@@ -1,5 +1,7 @@
 package com.solarad.app.desktop.auth
 
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import com.solarad.app.data.AdMobRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -10,8 +12,12 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Parameters
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -61,7 +67,7 @@ class DesktopGoogleAuthManager(
         const val USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
         const val ADMOB_SCOPES = "https://www.googleapis.com/auth/admob.readonly https://www.googleapis.com/auth/admob.report https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
 
-        private const val TIMEOUT_MS = 120_000 // 2 minutes
+        private const val TIMEOUT_MS = 180_000L // 3 minutes
     }
 
     private val jsonParser = Json {
@@ -75,22 +81,64 @@ class DesktopGoogleAuthManager(
         }
     }
 
-    /**
-     * Resolves the OAuth Client ID to use.
-     */
+    private val _activeAuthUrl = mutableStateOf<String?>(null)
+    val activeAuthUrl: State<String?> = _activeAuthUrl
+
+    private var pendingDeferred: CompletableDeferred<String>? = null
+    private var activeServerSocket: ServerSocket? = null
+
     fun getClientId(): String {
         return DEFAULT_CLIENT_ID
     }
 
     /**
-     * Initiates Google Sign-In via default system browser on macOS and Linux.
+     * Submits an authorization code or redirect URL manually (e.g. from copy/paste).
+     */
+    fun submitManualCode(input: String) {
+        val trimmed = input.trim()
+        if (trimmed.isBlank()) return
+
+        val code = if (trimmed.contains("code=")) {
+            val query = if (trimmed.contains("?")) trimmed.substringAfter("?") else trimmed
+            query.split("&")
+                .firstOrNull { it.startsWith("code=") }
+                ?.substringAfter("code=")
+                ?.let { URLDecoder.decode(it, StandardCharsets.UTF_8.name()) }
+                ?: trimmed
+        } else {
+            trimmed
+        }
+
+        pendingDeferred?.complete(code)
+    }
+
+    /**
+     * Cancels the active sign-in flow.
+     */
+    fun cancelSignIn() {
+        _activeAuthUrl.value = null
+        repository.setRefreshing(false)
+        try {
+            activeServerSocket?.close()
+        } catch (_: Exception) {}
+        pendingDeferred?.cancel()
+        pendingDeferred = null
+    }
+
+    /**
+     * Initiates Google Sign-In via browser and loopback server.
      */
     suspend fun signIn(
         onSuccess: (name: String, email: String, token: String, avatarUrl: String?) -> Unit,
         onError: (String) -> Unit
     ) = withContext(Dispatchers.IO) {
         var serverSocket: ServerSocket? = null
+        val deferred = CompletableDeferred<String>()
+        pendingDeferred = deferred
+
         try {
+            repository.setRefreshing(true)
+
             // 1. Generate PKCE verifier & challenge
             val codeVerifier = generateCodeVerifier()
             val codeChallenge = generateCodeChallenge(codeVerifier)
@@ -99,7 +147,8 @@ class DesktopGoogleAuthManager(
             // 2. Bind loopback server on 127.0.0.1
             val (socket, port) = bindLoopbackSocket()
             serverSocket = socket
-            serverSocket.soTimeout = TIMEOUT_MS
+            activeServerSocket = socket
+            serverSocket.soTimeout = TIMEOUT_MS.toInt()
 
             val redirectUri = "http://127.0.0.1:$port$REDIRECT_PATH"
 
@@ -111,32 +160,59 @@ class DesktopGoogleAuthManager(
                 state = state
             )
 
-            // 4. Launch browser
-            val opened = openBrowser(authUrl)
-            if (!opened) {
-                onError("Could not automatically open a web browser. Please open this URL manually:\n$authUrl")
-                return@withContext
+            withContext(Dispatchers.Main) {
+                _activeAuthUrl.value = authUrl
             }
 
-            // 5. Wait for the redirect callback
-            val callbackResult = awaitCallback(serverSocket, state)
-            if (callbackResult.error != null) {
-                val detail = if (callbackResult.error == "redirect_uri_mismatch") {
-                    "Google OAuth error: redirect_uri_mismatch. To authenticate on desktop, ensure 'http://127.0.0.1:$port$REDIRECT_PATH' is listed in your Google Cloud Console Authorized redirect URIs, or use a 'Desktop app' OAuth Client ID."
-                } else {
-                    "Sign-in was cancelled or failed: ${callbackResult.error}"
+            // Always log clearly to console/terminal
+            println("\n" + "=".repeat(72))
+            println("  [AdDash] Google Sign-In Requested")
+            println("  Please open this link in your browser to authorize:")
+            println("  $authUrl")
+            println("=".repeat(72) + "\n")
+
+            // 4. Try opening browser automatically
+            openBrowserDirectly(authUrl)
+
+            // 5. Start loopback listener in background coroutine
+            val listenerScope = CoroutineScope(Dispatchers.IO)
+            listenerScope.launch {
+                try {
+                    val result = awaitCallback(socket, state)
+                    if (result.error != null) {
+                        println("[AdDash] OAuth Callback Error: ${result.error}")
+                        if (result.error == "redirect_uri_mismatch") {
+                            onError("Google OAuth error: redirect_uri_mismatch. To authenticate, ensure 'http://127.0.0.1:$port$REDIRECT_PATH' is listed in your Google Cloud Console Authorized redirect URIs, or use a 'Desktop app' OAuth Client ID.")
+                        } else {
+                            onError("Sign-in cancelled or failed: ${result.error}")
+                        }
+                        deferred.cancel()
+                    } else if (!result.code.isNullOrBlank()) {
+                        deferred.complete(result.code)
+                    }
+                } catch (e: Exception) {
+                    // Socket closed or timed out
                 }
-                onError(detail)
-                return@withContext
             }
 
-            val authCode = callbackResult.code
+            // 6. Await either loopback callback or manual code entry
+            val authCode = withTimeoutOrNull(TIMEOUT_MS) {
+                deferred.await()
+            }
+
+            withContext(Dispatchers.Main) {
+                _activeAuthUrl.value = null
+            }
+
             if (authCode.isNullOrBlank()) {
-                onError("No authorization code received from Google.")
+                onError("Google Sign-In was cancelled or timed out.")
+                repository.setRefreshing(false)
                 return@withContext
             }
 
-            // 6. Exchange code for access & refresh tokens
+            println("[AdDash] Exchanging authorization code for OAuth tokens...")
+
+            // 7. Exchange code for access & refresh tokens
             val tokenResponse = exchangeCodeForToken(
                 code = authCode,
                 codeVerifier = codeVerifier,
@@ -144,7 +220,8 @@ class DesktopGoogleAuthManager(
             )
 
             if (tokenResponse == null || tokenResponse.access_token.isBlank()) {
-                onError("Failed to exchange authorization code for an AdMob access token.")
+                onError("Failed to exchange authorization code for an AdMob access token. Please verify network access.")
+                repository.setRefreshing(false)
                 return@withContext
             }
 
@@ -153,13 +230,15 @@ class DesktopGoogleAuthManager(
                 repository.saveRefreshToken(refreshToken)
             }
 
-            // 7. Fetch user profile
+            // 8. Fetch user profile
             val userInfo = fetchUserInfo(tokenResponse.access_token)
             val name = userInfo.name.ifBlank { "AdMob Publisher" }
             val email = userInfo.email.ifBlank { "" }
             val avatarUrl = userInfo.picture
 
-            // 8. Log in via repository
+            println("✅ [AdDash] Successfully authenticated as $name ($email)")
+
+            // 9. Complete login via repository
             withContext(Dispatchers.Main) {
                 onSuccess(name, email, tokenResponse.access_token, avatarUrl)
             }
@@ -167,10 +246,16 @@ class DesktopGoogleAuthManager(
         } catch (e: Exception) {
             val message = e.localizedMessage ?: e.message ?: "Authentication error"
             onError("Google Sign-In failed: $message")
+            repository.setRefreshing(false)
         } finally {
+            withContext(Dispatchers.Main) {
+                _activeAuthUrl.value = null
+            }
             try {
                 serverSocket?.close()
             } catch (_: Exception) {}
+            activeServerSocket = null
+            pendingDeferred = null
         }
     }
 
@@ -208,9 +293,6 @@ class DesktopGoogleAuthManager(
         }
     }
 
-    /**
-     * Clears desktop authentication state and stored tokens on Sign Out.
-     */
     fun signOut() {
         repository.clearRefreshToken()
     }
@@ -222,11 +304,9 @@ class DesktopGoogleAuthManager(
     private fun bindLoopbackSocket(): Pair<ServerSocket, Int> {
         val loopback = InetAddress.getByName("127.0.0.1")
         return try {
-            // Prefer DEFAULT_PORT (8585) so redirect URI is predictable
             val socket = ServerSocket(DEFAULT_PORT, 1, loopback)
             Pair(socket, DEFAULT_PORT)
         } catch (_: Exception) {
-            // Fallback to ephemeral free port
             val socket = ServerSocket(0, 1, loopback)
             Pair(socket, socket.localPort)
         }
@@ -273,8 +353,45 @@ class DesktopGoogleAuthManager(
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 
-    private fun openBrowser(url: String): Boolean {
-        // 1. Try AWT Desktop browse
+    fun openBrowserDirectly(url: String): Boolean {
+        val os = System.getProperty("os.name", "").lowercase()
+        val isMac = os.contains("mac") || os.contains("darwin")
+
+        // 1. On macOS, try 'open' command first
+        if (isMac) {
+            try {
+                ProcessBuilder("/usr/bin/open", url).start()
+                return true
+            } catch (_: Throwable) {}
+        }
+
+        // 2. On Linux, try command line launchers with environment first
+        if (!isMac) {
+            val linuxCommands = listOf(
+                listOf("xdg-open", url),
+                listOf("chromium-browser", url),
+                listOf("chromium", url),
+                listOf("google-chrome", url),
+                listOf("firefox", url),
+                listOf("gio", "open", url),
+                listOf("gnome-open", url),
+                listOf("sensible-browser", url)
+            )
+
+            for (cmd in linuxCommands) {
+                try {
+                    val pb = ProcessBuilder(cmd)
+                    val env = pb.environment()
+                    if (env["DISPLAY"].isNullOrBlank() && !System.getenv("DISPLAY").isNullOrBlank()) {
+                        env["DISPLAY"] = System.getenv("DISPLAY")
+                    }
+                    pb.start()
+                    return true
+                } catch (_: Throwable) {}
+            }
+        }
+
+        // 3. Fallback to Java AWT Desktop
         try {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                 Desktop.getDesktop().browse(URI(url))
@@ -282,27 +399,6 @@ class DesktopGoogleAuthManager(
             }
         } catch (_: Throwable) {}
 
-        // 2. Try OS-specific terminal launchers (macOS 'open', Linux 'xdg-open')
-        val os = System.getProperty("os.name", "").lowercase()
-        val commands = when {
-            os.contains("mac") || os.contains("darwin") -> listOf(arrayOf("/usr/bin/open", url), arrayOf("open", url))
-            else -> listOf(
-                arrayOf("xdg-open", url),
-                arrayOf("gio", "open", url),
-                arrayOf("gnome-open", url),
-                arrayOf("sensible-browser", url),
-                arrayOf("firefox", url),
-                arrayOf("chromium-browser", url),
-                arrayOf("google-chrome", url)
-            )
-        }
-
-        for (cmd in commands) {
-            try {
-                ProcessBuilder(*cmd).start()
-                return true
-            } catch (_: Throwable) {}
-        }
         return false
     }
 
@@ -315,7 +411,6 @@ class DesktopGoogleAuthManager(
             val reader = BufferedReader(InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8))
             val requestLine = reader.readLine() ?: return CallbackResult(error = "Empty request received")
 
-            // Parse GET /oauth2callback?... HTTP/1.1
             val parts = requestLine.split(" ")
             if (parts.size < 2) return CallbackResult(error = "Invalid HTTP request")
 
@@ -339,7 +434,6 @@ class DesktopGoogleAuthManager(
             val code = queryParams["code"]
             val state = queryParams["state"]
 
-            // Verify state
             if (state != null && state != expectedState) {
                 sendHtmlResponse(client, false, "Security verification failed (state mismatch).")
                 return CallbackResult(error = "CSRF state token mismatch.")
@@ -468,6 +562,7 @@ class DesktopGoogleAuthManager(
 
         val text = response.bodyAsText()
         if (!response.status.isSuccess()) {
+            println("[AdDash] Token exchange failed with HTTP ${response.status.value}: $text")
             return null
         }
 

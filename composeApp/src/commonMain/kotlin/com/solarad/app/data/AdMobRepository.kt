@@ -133,6 +133,10 @@ class AdMobRepository(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    fun setRefreshing(refreshing: Boolean) {
+        _isRefreshing.value = refreshing
+    }
+
     private val _isOffline = MutableStateFlow(false)
     val isOffline: StateFlow<Boolean> = _isOffline.asStateFlow()
 
