@@ -33,4 +33,4 @@ dependencyResolutionManagement {
 
 include(":composeApp")
 include(":androidApp")
-// include(":desktopApp")
+include(":desktopApp")
