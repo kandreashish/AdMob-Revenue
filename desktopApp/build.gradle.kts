@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+val appVersion = project.findProperty("app.versionName") as? String ?: "1.0.0"
+
 kotlin {
     jvm {
         @OptIn(ExperimentalKotlinGradlePluginApi::class)
@@ -23,6 +25,14 @@ kotlin {
             implementation("org.jetbrains.compose.desktop:desktop-jvm-linux-arm64:${libs.versions.composeMultiplatform.get()}")
             implementation("org.jetbrains.compose.desktop:desktop-jvm-linux-x64:${libs.versions.composeMultiplatform.get()}")
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.okhttp)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+        }
+        jvmTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.multiplatform.settings.test)
         }
     }
 }
@@ -32,15 +42,15 @@ compose.desktop {
         mainClass = "com.solarad.app.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
-            packageName = "SolarAd"
-            packageVersion = "1.0.0"
-            description = "SolarAd - AdMob Analytics Dashboard"
-            copyright = "© 2026 SolarAd"
-            vendor = "SolarAd"
+            packageName = "AdDash"
+            packageVersion = appVersion
+            description = "AdDash - AdMob Analytics Dashboard"
+            copyright = "© 2026 AdDash"
+            vendor = "AdDash"
 
             macOS {
                 iconFile.set(project.file("src/jvmMain/resources/icons/icon.icns"))
-                bundleID = "com.solarad.app"
+                bundleID = "com.lavish.addash"
             }
         }
     }
@@ -49,6 +59,7 @@ compose.desktop {
 // Tasks for Raspberry Pi (Linux ARM64) Distribution & Packaging
 val prepareRaspberryPiLibs by tasks.registering(Sync::class) {
     dependsOn("jvmJar")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     val jvmRuntimeClasspath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles
     val jvmJar = tasks.named("jvmJar", org.gradle.jvm.tasks.Jar::class)
 
@@ -60,19 +71,19 @@ val prepareRaspberryPiLibs by tasks.registering(Sync::class) {
 tasks.register<Tar>("packageRaspberryPiTar") {
     dependsOn(prepareRaspberryPiLibs)
     group = "distribution"
-    description = "Packages SolarAd into a standalone tar.gz bundle for Raspberry Pi / Linux ARM64"
+    description = "Packages AdDash into a standalone tar.gz bundle for Raspberry Pi / Linux ARM64"
 
-    archiveBaseName.set("solarad")
-    archiveVersion.set("1.0.0")
+    archiveBaseName.set("addash")
+    archiveVersion.set(appVersion)
     archiveClassifier.set("raspberry-pi-arm64")
     archiveExtension.set("tar.gz")
     compression = Compression.GZIP
     destinationDirectory.set(layout.buildDirectory.dir("distributions"))
 
-    into("solarad") {
+    into("addash") {
         into("bin") {
-            from(file("src/jvmMain/resources/linux/solarad.sh")) {
-                rename { "solarad" }
+            from(file("src/jvmMain/resources/linux/addash.sh")) {
+                rename { "addash" }
                 filePermissions {
                     unix("rwxr-xr-x")
                 }
@@ -82,11 +93,11 @@ tasks.register<Tar>("packageRaspberryPiTar") {
             from(layout.buildDirectory.dir("pi-libs"))
         }
         into("share/applications") {
-            from(file("src/jvmMain/resources/linux/solarad.desktop"))
+            from(file("src/jvmMain/resources/linux/addash.desktop"))
         }
         into("share/icons") {
             from(file("src/jvmMain/resources/icons/icon.png")) {
-                rename { "solarad.png" }
+                rename { "addash.png" }
             }
         }
     }
@@ -95,16 +106,16 @@ tasks.register<Tar>("packageRaspberryPiTar") {
 tasks.register<Exec>("packageRaspberryPiDeb") {
     dependsOn(prepareRaspberryPiLibs)
     group = "distribution"
-    description = "Packages SolarAd into a Debian .deb package installable on Raspberry Pi (ARM64)"
+    description = "Packages AdDash into a Debian .deb package installable on Raspberry Pi (ARM64)"
 
-    val outputDeb = layout.buildDirectory.file("distributions/solarad_1.0.0_arm64.deb")
+    val outputDeb = layout.buildDirectory.file("distributions/addash_${appVersion}_arm64.deb")
 
     commandLine(
         "python3",
         file("package_deb.py").absolutePath,
         "--lib-dir", layout.buildDirectory.dir("pi-libs").get().asFile.absolutePath,
-        "--launcher", file("src/jvmMain/resources/linux/solarad.sh").absolutePath,
-        "--desktop", file("src/jvmMain/resources/linux/solarad.desktop").absolutePath,
+        "--launcher", file("src/jvmMain/resources/linux/addash.sh").absolutePath,
+        "--desktop", file("src/jvmMain/resources/linux/addash.desktop").absolutePath,
         "--control", file("src/jvmMain/resources/linux/control").absolutePath,
         "--icon", file("src/jvmMain/resources/icons/icon.png").absolutePath,
         "--output", outputDeb.get().asFile.absolutePath

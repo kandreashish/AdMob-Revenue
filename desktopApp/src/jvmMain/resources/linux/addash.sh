@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SolarAd Launcher for Linux / Raspberry Pi
+# AdDash Launcher for Linux / Raspberry Pi
 
 set -e
 
@@ -12,7 +12,7 @@ if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
 elif command -v java >/dev/null 2>&1; then
     JAVA_EXEC="java"
 else
-    echo "Error: Java 17 or higher is required to run SolarAd." >&2
+    echo "Error: Java 17 or higher is required to run AdDash." >&2
     echo "Install it with: sudo apt install default-jre -y" >&2
     exit 1
 fi

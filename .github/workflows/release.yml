@@ -1,0 +1,96 @@
+name: Release AdDash Installables
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Optional manual release tag (e.g. v1.0.1)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release Installables (macOS & Raspberry Pi)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Determine Release Tag
+        id: release_info
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            APP_VER=$(grep '^app.versionName=' gradle.properties | cut -d'=' -f2 | tr -d ' \r\n')
+            TAG="v${APP_VER}-build.${{ github.run_number }}"
+          fi
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+          echo "Selected release tag: $TAG"
+
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x gradlew
+
+      - name: Build macOS DMG & Raspberry Pi Installables
+        run: |
+          ./gradlew :desktopApp:packageDmg \
+                    :desktopApp:packageRaspberryPiDeb \
+                    :desktopApp:packageRaspberryPiTar
+
+      - name: Verify Generated Assets
+        run: |
+          echo "Generated macOS DMG:"
+          ls -lh desktopApp/build/compose/binaries/main/dmg/
+          echo "Generated Linux Raspberry Pi distributions:"
+          ls -lh desktopApp/build/distributions/
+
+      - name: Create GitHub Release & Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "AdDash ${{ env.RELEASE_TAG }}"
+          body: |
+            ## AdDash Release ${{ env.RELEASE_TAG }}
+
+            Installable packages for **macOS** and **Raspberry Pi (Linux ARM64)**:
+
+            ### 📦 Download Assets:
+            - **macOS Installer (`.dmg`)**: Open the `.dmg` and drag **AdDash** to `/Applications`.
+            - **Raspberry Pi / Linux ARM64 (`.deb`)**: Install via `sudo apt install ./<file>.deb` or `sudo dpkg -i <file>.deb`.
+            - **Linux ARM64 Portable (`.tar.gz`)**: Extract and execute `./addash/bin/addash`.
+
+            ---
+            *Built with Compose Multiplatform.*
+          files: |
+            desktopApp/build/compose/binaries/main/dmg/*.dmg
+            desktopApp/build/distributions/*.deb
+            desktopApp/build/distributions/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

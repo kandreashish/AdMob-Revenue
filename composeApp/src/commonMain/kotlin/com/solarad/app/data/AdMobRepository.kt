@@ -42,6 +42,7 @@ class AdMobRepository(
         private const val KEY_CACHE_REGISTERED_APPS = "solarad_cache_registered_apps"
         private const val KEY_CACHE_TIMESTAMP = "solarad_cache_timestamp"
         private const val KEY_CUSTOM_DAILY_GOAL = "solarad_custom_daily_goal"
+        private const val KEY_REFRESH_TOKEN = "solarad_oauth_refresh_token"
     }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
@@ -178,6 +179,19 @@ class AdMobRepository(
             settings?.putString(KEY_ACCESS_TOKEN, cleanToken)
             _authError.value = null
         }
+    }
+
+    fun getStoredRefreshToken(): String? = settings?.getStringOrNull(KEY_REFRESH_TOKEN)
+
+    fun saveRefreshToken(token: String) {
+        val cleanToken = token.trim()
+        if (cleanToken.isNotBlank()) {
+            settings?.putString(KEY_REFRESH_TOKEN, cleanToken)
+        }
+    }
+
+    fun clearRefreshToken() {
+        settings?.remove(KEY_REFRESH_TOKEN)
     }
 
     fun clearAuthError() {
@@ -536,6 +550,7 @@ class AdMobRepository(
             remove(KEY_CACHE_REGISTERED_APPS)
             remove(KEY_CACHE_TIMESTAMP)
             remove(KEY_CUSTOM_DAILY_GOAL)
+            remove(KEY_REFRESH_TOKEN)
         }
         _customDailyGoal.value = null
         _session.value = UserSession(

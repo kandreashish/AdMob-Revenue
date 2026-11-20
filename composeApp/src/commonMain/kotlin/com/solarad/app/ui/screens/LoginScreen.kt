@@ -168,7 +168,7 @@ fun LoginScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                    contentDescription = "AdCash Brand",
+                    contentDescription = "AdDash Brand",
                     tint = PureWhite,
                     modifier = Modifier.size(38.dp)
                 )
@@ -178,7 +178,7 @@ fun LoginScreen(
 
             // Brand Title
             Text(
-                text = "AdCash",
+                text = "AdDash",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = SolarTheme.colors.textPrimary,

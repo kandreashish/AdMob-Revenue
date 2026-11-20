@@ -118,7 +118,7 @@ fun SplashScreen(
                             )
                     )
 
-                    // AdCash Icon
+                    // AdDash Icon
                     AdCashIconBadge(
                         modifier = Modifier
                             .size(112.dp)
@@ -130,7 +130,7 @@ fun SplashScreen(
 
                 // Brand Name
                 Text(
-                    text = "AdCash",
+                    text = "AdDash",
                     fontSize = 32.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = textPrimary,

@@ -77,12 +77,13 @@ fun FullScreenEarningScreen(
         onExit()
     }
 
-    // 2. Track changes to today's earnings to trigger celebration confetti
+    // 2. Track increases to today's earnings to trigger celebration confetti
     var celebrationTrigger by remember { mutableStateOf(0) }
     var previousRevenue by remember { mutableStateOf<Double?>(null) }
 
     LaunchedEffect(summary.todayRevenue) {
-        if (previousRevenue != null && summary.todayRevenue != previousRevenue) {
+        val prev = previousRevenue
+        if (prev != null && summary.todayRevenue > prev) {
             celebrationTrigger++
         }
         previousRevenue = summary.todayRevenue
@@ -142,9 +143,8 @@ fun FullScreenEarningScreen(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                // Tapping toggles exit button visibility and triggers playful celebration
+                // Tapping only toggles exit button / controls visibility
                 showControls = !showControls
-                celebrationTrigger++
             }
     ) {
         // Ambient soft radial gradient behind the big digits

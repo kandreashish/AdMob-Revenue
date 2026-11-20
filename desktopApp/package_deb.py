@@ -29,7 +29,7 @@ def create_ar_archive(ar_path, file_entries):
             # 8 bytes file mode (octal)
             # 10 bytes file size
             # 2 bytes end magic (b"`\n")
-            header_name = (name + "/").ljust(16)
+            header_name = name.ljust(16)
             timestamp = "0".ljust(12)
             uid = "0".ljust(6)
             gid = "0".ljust(6)
@@ -72,7 +72,7 @@ def make_tar_gz(source_dir, output_tar_gz):
                     tar.addfile(info, file_obj)
 
 def main():
-    parser = argparse.ArgumentParser(description="Package SolarAd into Debian .deb for Raspberry Pi")
+    parser = argparse.ArgumentParser(description="Package AdDash into Debian .deb for Raspberry Pi")
     parser.add_argument("--lib-dir", required=True, help="Directory containing all dependency JARs")
     parser.add_argument("--launcher", required=True, help="Path to launcher shell script")
     parser.add_argument("--desktop", required=True, help="Path to .desktop entry")
@@ -99,9 +99,9 @@ def main():
 
         # 3. Build data directory (root filesystem structure)
         data_dir = os.path.join(temp_dir, "data_dir")
-        opt_solarad = os.path.join(data_dir, "opt", "solarad")
-        opt_bin = os.path.join(opt_solarad, "bin")
-        opt_lib = os.path.join(opt_solarad, "lib")
+        opt_addash = os.path.join(data_dir, "opt", "addash")
+        opt_bin = os.path.join(opt_addash, "bin")
+        opt_lib = os.path.join(opt_addash, "lib")
         usr_bin = os.path.join(data_dir, "usr", "bin")
         usr_apps = os.path.join(data_dir, "usr", "share", "applications")
         usr_icons = os.path.join(data_dir, "usr", "share", "icons", "hicolor", "512x512", "apps")
@@ -116,23 +116,22 @@ def main():
                 shutil.copy2(os.path.join(args.lib_dir, fname), os.path.join(opt_lib, fname))
 
         # Copy launcher script
-        dest_launcher = os.path.join(opt_bin, "solarad")
+        dest_launcher = os.path.join(opt_bin, "addash")
         shutil.copy2(args.launcher, dest_launcher)
         os.chmod(dest_launcher, 0o755)
 
-        # Create symlink /usr/bin/solarad -> /opt/solarad/bin/solarad
-        # For tar archive compatibility, write a small shell wrapper in /usr/bin/solarad:
-        usr_bin_solarad = os.path.join(usr_bin, "solarad")
-        with open(usr_bin_solarad, "w") as f:
-            f.write("#!/bin/sh\nexec /opt/solarad/bin/solarad \"$@\"\n")
-        os.chmod(usr_bin_solarad, 0o755)
+        # Create shell wrapper in /usr/bin/addash
+        usr_bin_addash = os.path.join(usr_bin, "addash")
+        with open(usr_bin_addash, "w") as f:
+            f.write("#!/bin/sh\nexec /opt/addash/bin/addash \"$@\"\n")
+        os.chmod(usr_bin_addash, 0o755)
 
         # Copy .desktop entry
-        shutil.copy2(args.desktop, os.path.join(usr_apps, "solarad.desktop"))
+        shutil.copy2(args.desktop, os.path.join(usr_apps, "addash.desktop"))
 
         # Copy icons
-        shutil.copy2(args.icon, os.path.join(usr_icons, "solarad.png"))
-        shutil.copy2(args.icon, os.path.join(usr_pixmaps, "solarad.png"))
+        shutil.copy2(args.icon, os.path.join(usr_icons, "addash.png"))
+        shutil.copy2(args.icon, os.path.join(usr_pixmaps, "addash.png"))
 
         data_tar_gz = os.path.join(temp_dir, "data.tar.gz")
         make_tar_gz(data_dir, data_tar_gz)

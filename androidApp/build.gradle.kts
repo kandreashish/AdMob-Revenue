@@ -22,13 +22,13 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
-            resValue("string", "app_name", "AdCash")
+            resValue("string", "app_name", "AdDash")
         }
         getByName("debug") {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            resValue("string", "app_name", "AdCash")
+            resValue("string", "app_name", "AdDash")
         }
     }
 

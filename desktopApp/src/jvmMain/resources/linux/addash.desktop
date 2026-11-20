@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AdDash
+Comment=AdDash AdMob Analytics Dashboard
+Exec=/usr/bin/addash %u
+Icon=addash
+Terminal=false
+Categories=Office;Finance;Network;
+StartupWMClass=AdDash
