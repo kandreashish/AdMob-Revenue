@@ -48,8 +48,8 @@ def create_ar_archive(ar_path, file_entries):
                 ar.write(b"\n")
 
 def make_tar_gz(source_dir, output_tar_gz):
-    """Creates a tar.gz where all files are root-owned."""
-    with tarfile.open(output_tar_gz, "w:gz") as tar:
+    """Creates a tar.gz where all files are root-owned using GNU tar format (required by dpkg)."""
+    with tarfile.open(output_tar_gz, "w:gz", format=tarfile.GNU_FORMAT) as tar:
         for root, dirs, files in os.walk(source_dir):
             for d in sorted(dirs):
                 full_path = os.path.join(root, d)
