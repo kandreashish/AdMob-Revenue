@@ -6,66 +6,109 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import io.ktor.client.plugins.HttpTimeout
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 object AppIconResolver {
-    private val client = HttpClient()
+    private val client = HttpClient {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15_000
+            connectTimeoutMillis = 8_000
+            socketTimeoutMillis = 10_000
+        }
+    }
+    // One long-lived scope; SupervisorJob so one failed lookup doesn't cancel the others.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val ogImagePattern1 = Regex("""<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+    private val ogImagePattern2 = Regex("""<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']""", RegexOption.IGNORE_CASE)
     private val json = Json { ignoreUnknownKeys = true }
     private val settings = createDefaultSettings()
-    private val memoryCache = mutableMapOf<String, String>()
+
+    // Thread-safe caches
+    private val mutex = Mutex()
+    // Copy-on-write immutable snapshot: lock-free reads from any thread, writes go through [putMemory].
+    @kotlin.concurrent.Volatile private var memoryCache: Map<String, String> = emptyMap()
+    private fun putMemory(id: String, value: String) {
+        // Writes are rare (once per app); synchronising via a tiny CAS-free copy is fine because the
+        // only racing writers are resolver coroutines that already hold [mutex], or idempotent disk-hit backfills.
+        memoryCache = memoryCache + (id to value)
+    }
+
+    // Sentinel stored when resolution was attempted but returned nothing,
+    // so we never re-fetch the same app repeatedly.
+    private const val SENTINEL_NO_ICON = "__NO_ICON__"
+
     private val _iconUpdates = MutableStateFlow<Map<String, String>>(emptyMap())
     val iconUpdates: StateFlow<Map<String, String>> = _iconUpdates.asStateFlow()
 
+    // Tracks IDs currently being fetched (mutex-protected)
     private val inFlight = mutableSetOf<String>()
 
     fun getCachedIconUrl(app: AppMonetization): String? {
         if (!app.iconUrl.isNullOrBlank()) return app.iconUrl
         val cached = memoryCache[app.id]
             ?: settings?.getStringOrNull("app_icon_${app.id}")
-            ?: (app.appStoreId?.let { settings?.getStringOrNull("app_icon_store_$it") })
+            ?: app.appStoreId?.let { settings?.getStringOrNull("app_icon_store_$it") }
         if (cached != null) {
-            memoryCache[app.id] = cached
-            return cached
+            if (memoryCache[app.id] != cached) putMemory(app.id, cached)
+            // Return null for the sentinel so callers still show the monogram
+            return if (cached == SENTINEL_NO_ICON) null else cached
         }
         return null
     }
 
     fun requestIconResolve(app: AppMonetization) {
-        val existing = getCachedIconUrl(app)
-        if (existing != null) return
+        // Already have a URL (or already know there is none)
+        val rawCached = memoryCache[app.id]
+            ?: settings?.getStringOrNull("app_icon_${app.id}")
+            ?: app.appStoreId?.let { settings?.getStringOrNull("app_icon_store_$it") }
+        if (rawCached != null) return  // covers both real URLs and the sentinel
+
+        if (!app.iconUrl.isNullOrBlank()) return
 
         val key = app.id.ifBlank { app.name }
-        if (inFlight.contains(key)) return
-        inFlight.add(key)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
+            val alreadyRunning = mutex.withLock {
+                if (inFlight.contains(key)) true
+                else { inFlight.add(key); false }
+            }
+            if (alreadyRunning) return@launch
+
             try {
                 val resolvedUrl = resolveStoreIcon(app)
-                if (!resolvedUrl.isNullOrBlank()) {
-                    memoryCache[app.id] = resolvedUrl
-                    settings?.putString("app_icon_${app.id}", resolvedUrl)
-                    val sId = app.appStoreId
-                    if (sId != null) {
-                        settings?.putString("app_icon_store_$sId", resolvedUrl)
+                mutex.withLock {
+                    if (!resolvedUrl.isNullOrBlank()) {
+                        putMemory(app.id, resolvedUrl)
+                        settings?.putString("app_icon_${app.id}", resolvedUrl)
+                        app.appStoreId?.let { sId ->
+                            settings?.putString("app_icon_store_$sId", resolvedUrl)
+                        }
+                        _iconUpdates.update { it + (app.id to resolvedUrl) }
+                    } else {
+                        // Record that we tried and found nothing — prevents infinite retries
+                        putMemory(app.id, SENTINEL_NO_ICON)
+                        settings?.putString("app_icon_${app.id}", SENTINEL_NO_ICON)
                     }
-                    val updated = _iconUpdates.value.toMutableMap()
-                    updated[app.id] = resolvedUrl
-                    _iconUpdates.value = updated
                 }
             } catch (_: Throwable) {
-                // Ignore resolution failure; fallback to monogram
+                // Network/parse error — do NOT cache the sentinel so we retry next time
             } finally {
-                inFlight.remove(key)
+                mutex.withLock { inFlight.remove(key) }
             }
         }
     }
@@ -75,7 +118,7 @@ object AppIconResolver {
         val storeId = app.appStoreId?.trim()
 
         if (isIos) {
-            // 1. Try Apple iTunes lookup by store ID
+            // 1. Try Apple iTunes lookup by numeric store ID or bundle ID
             if (!storeId.isNullOrBlank()) {
                 val isNumeric = storeId.all { it.isDigit() }
                 val itunesUrl = if (isNumeric) {
@@ -87,21 +130,20 @@ object AppIconResolver {
                 if (icon != null) return icon
             }
 
-            // 2. Try iTunes search by app name
+            // 2. Fallback: iTunes search by app name
             if (app.name.isNotBlank()) {
                 val searchUrl = "https://itunes.apple.com/search?term=${encodeParam(app.name)}&entity=software&limit=1"
                 val icon = fetchItunesIcon(searchUrl)
                 if (icon != null) return icon
             }
         } else {
-            // Android Google Play lookup
+            // Android: try Google Play icon via open-graph scrape
             if (!storeId.isNullOrBlank() && storeId.contains(".")) {
-                val playUrl = "https://play.google.com/store/apps/details?id=$storeId&hl=en"
-                val icon = fetchPlayStoreIcon(playUrl)
+                val icon = fetchPlayStoreIcon(storeId)
                 if (icon != null) return icon
             }
 
-            // Fallback: Check iTunes for cross-platform matching icon
+            // Fallback: iTunes search for cross-platform icon
             if (app.name.isNotBlank()) {
                 val searchUrl = "https://itunes.apple.com/search?term=${encodeParam(app.name)}&entity=software&limit=1"
                 val icon = fetchItunesIcon(searchUrl)
@@ -129,18 +171,30 @@ object AppIconResolver {
         }
     }
 
-    private suspend fun fetchPlayStoreIcon(url: String): String? {
+    private suspend fun fetchPlayStoreIcon(packageId: String): String? {
         return try {
-            val response = client.get(url) {
+            // Use the undocumented but stable Play Store icon endpoint directly —
+            // much more reliable than HTML-scraping the JS-rendered store page.
+            val directUrl = "https://play-lh.googleusercontent.com/app/icon?appid=$packageId"
+            val directResponse = client.get(directUrl) {
                 header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+            }
+            if (directResponse.status.isSuccess()) return directUrl
+
+            // Fallback: open-graph scrape of the store page
+            val storeUrl = "https://play.google.com/store/apps/details?id=$packageId&hl=en"
+            val response = client.get(storeUrl) {
+                header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36")
             }
             if (!response.status.isSuccess()) return null
             val html = response.bodyAsText()
-            // Look for <meta property="og:image" content="...">
-            val metaPattern = Regex("""<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-            val match = metaPattern.find(html) ?: Regex("""<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']""", RegexOption.IGNORE_CASE).find(html)
-            val iconUrl = match?.groupValues?.get(1)?.replace("&amp;", "&")
-            if (!iconUrl.isNullOrBlank() && (iconUrl.contains("googleusercontent.com") || iconUrl.contains("play-lh"))) {
+
+            val iconUrl = (ogImagePattern1.find(html) ?: ogImagePattern2.find(html))
+                ?.groupValues?.get(1)
+                ?.replace("&amp;", "&")
+            if (!iconUrl.isNullOrBlank() &&
+                (iconUrl.contains("googleusercontent.com") || iconUrl.contains("play-lh"))
+            ) {
                 iconUrl
             } else {
                 null
@@ -150,7 +204,5 @@ object AppIconResolver {
         }
     }
 
-    private fun encodeParam(text: String): String {
-        return text.trim().replace(" ", "+")
-    }
+    private fun encodeParam(text: String): String = text.trim().replace(" ", "+")
 }

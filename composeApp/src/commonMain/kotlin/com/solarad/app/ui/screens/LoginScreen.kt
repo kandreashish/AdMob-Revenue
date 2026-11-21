@@ -1,6 +1,21 @@
 package com.solarad.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -76,7 +91,7 @@ import com.solarad.app.theme.SolarTheme
 fun LoginScreen(
     authError: String? = null,
     isAuthenticating: Boolean = false,
-    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    themeMode: ThemeMode = ThemeMode.LIGHT,
     onSelectTheme: ((ThemeMode) -> Unit)? = null,
     onClearError: () -> Unit = {},
     onContinueWithGoogle: () -> Unit,
@@ -86,319 +101,220 @@ fun LoginScreen(
     var tokenInput by remember { mutableStateOf("") }
     var tokenDialogError by remember { mutableStateOf<String?>(null) }
 
+    val openTokenDialog = {
+        onClearError()
+        tokenDialogError = null
+        showTokenDialog = true
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(SolarTheme.colors.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 24.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Theme Toggle Quick Action
-            if (onSelectTheme != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
+            // Top bar: wordmark + theme toggle
+            Row(
+                modifier = Modifier.fillMaxWidth().widthIn(max = 440.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BrandMark(size = 28.dp)
+                Spacer(Modifier.width(8.dp))
+                Text("AdDash", fontSize = 18.sp, fontWeight = FontWeight.Medium, color = SolarTheme.colors.textPrimary)
+                Spacer(Modifier.weight(1f))
+                if (onSelectTheme != null) {
                     val nextMode = when (themeMode) {
                         ThemeMode.SYSTEM -> ThemeMode.LIGHT
                         ThemeMode.LIGHT -> ThemeMode.DARK
                         ThemeMode.DARK -> ThemeMode.SYSTEM
                     }
-                    Surface(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(999.dp))
-                            .clickable { onSelectTheme(nextMode) },
-                        color = SolarTheme.colors.surfaceVariant
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = when (themeMode) {
-                                    ThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
-                                    ThemeMode.LIGHT -> Icons.Default.LightMode
-                                    ThemeMode.DARK -> Icons.Default.DarkMode
-                                },
-                                contentDescription = "Toggle Theme",
-                                tint = SolarAmber,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = themeMode.label,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = SolarTheme.colors.textPrimary
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Ambient Radiant Sun Motif
-            Box(
-                modifier = Modifier
-                    .size(76.dp)
-                    .shadow(
-                        elevation = 16.dp,
-                        shape = CircleShape,
-                        ambientColor = SolarAmber.copy(alpha = 0.4f),
-                        spotColor = SolarAmber.copy(alpha = 0.3f)
-                    )
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFFD54F),
-                                SolarAmber,
-                                Color(0xFFD97706)
-                            )
+                    IconButton(onClick = { onSelectTheme(nextMode) }) {
+                        Icon(
+                            imageVector = when (themeMode) {
+                                ThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                                ThemeMode.LIGHT -> Icons.Default.LightMode
+                                ThemeMode.DARK -> Icons.Default.DarkMode
+                            },
+                            contentDescription = "Theme: ${themeMode.label}",
+                            tint = SolarTheme.colors.textSecondary,
+                            modifier = Modifier.size(20.dp)
                         )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                    contentDescription = "AdDash Brand",
-                    tint = PureWhite,
-                    modifier = Modifier.size(38.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Brand Title
-            Text(
-                text = "AdDash",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = SolarTheme.colors.textPrimary,
-                letterSpacing = (-0.02).sp
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Value Proposition Headline
-            Text(
-                text = "Your Daily Revenue,\nEffortlessly Clear.",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = SolarTheme.colors.textPrimary,
-                textAlign = TextAlign.Center,
-                lineHeight = 28.sp
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Live Google AdMob earnings, eCPM velocity, and real performance in peaceful daylight.",
-                fontSize = 13.sp,
-                color = SolarTheme.colors.textSecondary,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Trust & Privacy Pill
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .border(1.dp, OceanAzure.copy(alpha = 0.25f), RoundedCornerShape(999.dp)),
-                color = SolarTheme.colors.secondaryContainer
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = OceanAzure,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = "Read-only connection • Credentials never stored",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = OceanAzure
-                    )
-                }
-            }
-
-            // Auth Error Banner
-            AnimatedVisibility(
-                visible = authError != null,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                authError?.let { msg ->
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp)
-                            .border(1.dp, Color(0xFFFCA5A5), RoundedCornerShape(12.dp)),
-                        color = Color(0xFFFEF2F2),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ErrorOutline,
-                                contentDescription = null,
-                                tint = Color(0xFFDC2626),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = msg,
-                                color = Color(0xFF991B1B),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = onClearError,
-                                modifier = Modifier.size(22.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Dismiss",
-                                    tint = Color(0xFF991B1B),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(Modifier.weight(1f).heightIn(min = 24.dp))
 
-            // Primary Google Sign In CTA
+            // Sign-in card
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
-                    .shadow(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(999.dp),
-                        ambientColor = Color.Black.copy(alpha = 0.06f)
-                    )
-                    .clip(RoundedCornerShape(999.dp))
-                    .border(1.dp, SolarTheme.colors.borderMedium, RoundedCornerShape(999.dp))
-                    .clickable(enabled = !isAuthenticating) {
-                        onClearError()
-                        onContinueWithGoogle()
-                    },
+                    .widthIn(max = 440.dp)
+                    .border(1.dp, SolarTheme.colors.borderMedium, RoundedCornerShape(12.dp)),
+                shape = RoundedCornerShape(12.dp),
                 color = SolarTheme.colors.cardBackground
             ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (isAuthenticating) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = SolarAmber,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Connecting to AdMob...",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = SolarTheme.colors.textPrimary
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF4285F4)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "G",
-                                color = PureWhite,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
+                    BrandMark(size = 56.dp)
+                    Spacer(Modifier.height(20.dp))
+                    Text(
+                        text = "Sign in",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = SolarTheme.colors.textPrimary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Use the Google account linked to your AdMob publisher account",
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        color = SolarTheme.colors.textSecondary,
+                        textAlign = TextAlign.Center
+                    )
+
+                    AnimatedVisibility(visible = authError != null, enter = fadeIn(), exit = fadeOut()) {
+                        authError?.let { msg ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                                color = SolarTheme.colors.errorContainer,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = SolarTheme.colors.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        text = msg,
+                                        color = SolarTheme.colors.onErrorContainer,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(onClick = onClearError, modifier = Modifier.size(24.dp)) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Dismiss error",
+                                            tint = SolarTheme.colors.onErrorContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+                    }
+
+                    Spacer(Modifier.height(28.dp))
+
+                    // Primary: Sign in with Google (Google branding guidelines: white/neutral button + G mark)
+                    Button(
+                        onClick = {
+                            onClearError()
+                            onContinueWithGoogle()
+                        },
+                        enabled = !isAuthenticating,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SolarAmber,
+                            contentColor = PureWhite,
+                            disabledContainerColor = SolarAmber.copy(alpha = 0.6f),
+                            disabledContentColor = PureWhite
+                        ),
+                        contentPadding = PaddingValues(start = 4.dp, end = 16.dp)
+                    ) {
+                        if (isAuthenticating) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = PureWhite,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text("Connecting to AdMob…", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        } else {
+                            Box(
+                                modifier = Modifier.size(40.dp).clip(CircleShape).background(PureWhite),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                GoogleGLogo(Modifier.size(20.dp))
+                            }
+                            Text(
+                                "Sign in with Google",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(Modifier.width(40.dp))
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        HorizontalDivider(Modifier.weight(1f), color = SolarTheme.colors.borderMedium)
                         Text(
-                            text = "Continue with Google",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = SolarTheme.colors.textPrimary
+                            "or",
+                            fontSize = 12.sp,
+                            color = SolarTheme.colors.textSecondary,
+                            modifier = Modifier.padding(horizontal = 12.dp)
                         )
+                        HorizontalDivider(Modifier.weight(1f), color = SolarTheme.colors.borderMedium)
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    OutlinedButton(
+                        onClick = openTokenDialog,
+                        enabled = !isAuthenticating,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        border = BorderStroke(1.dp, SolarTheme.colors.borderMedium)
+                    ) {
+                        Icon(Icons.Default.Key, contentDescription = null, tint = SolarAmber, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Use an access token", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = SolarAmber)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(Modifier.height(28.dp))
 
-            // Secondary Option: API Token
-            Text(
-                text = "Or connect via AdMob API Token",
-                fontSize = 12.sp,
-                color = SolarTheme.colors.textSecondary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .clickable {
-                        onClearError()
-                        tokenDialogError = null
-                        showTokenDialog = true
-                    }
-                    .padding(4.dp)
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // 3 Feature Highlights
+            // What you get — quiet, compact list
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier.fillMaxWidth().widthIn(max = 440.dp).padding(horizontal = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                FeaturePointCard(
-                    icon = Icons.Default.Schedule,
-                    title = "Real-Time AdMob Metrics",
-                    description = "Actual intraday revenue, yesterday pacing deltas, and live eCPM yield."
-                )
-                FeaturePointCard(
-                    icon = Icons.Default.Insights,
-                    title = "Ad Format Contribution",
-                    description = "Accurate format breakdown across Rewarded, Interstitial, Native, and Banner units."
-                )
-                FeaturePointCard(
-                    icon = Icons.Default.AccountBalanceWallet,
-                    title = "Payout Balance & Cycle",
-                    description = "Track your minimum $100 AdSense payout threshold and wire disbursement schedule."
-                )
+                FeatureRow(Icons.Default.Schedule, "Live earnings", "Today's revenue, eCPM and impressions, refreshed automatically.")
+                FeatureRow(Icons.Default.Insights, "AdMob-style reports", "Break down by app, ad format, country and date. Export to CSV.")
+                FeatureRow(Icons.Default.Lock, "Read-only access", "AdDash only requests AdMob reporting permission. It can't change your account.")
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.weight(1f).heightIn(min = 24.dp))
 
-            // Footer
             Text(
-                text = "Official Google AdMob Reporting API v1 Verified",
-                fontSize = 10.sp,
+                text = "AdDash is an independent app and is not affiliated with Google.\nData is provided by the AdMob API.",
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
                 color = SolarTheme.colors.textMuted,
-                fontWeight = FontWeight.Medium
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 440.dp)
             )
         }
     }
@@ -422,7 +338,7 @@ fun LoginScreen(
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = "Paste your Google Cloud OAuth access token or read-only reporting token:",
+                        text = "Paste an OAuth 2.0 access token with the AdMob reporting scope (admob.readonly). Tokens usually expire after 1 hour.",
                         fontSize = 12.sp,
                         color = SolarTheme.colors.textSecondary
                     )
@@ -442,7 +358,7 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = tokenDialogError.orEmpty(),
-                            color = Color(0xFFDC2626),
+                            color = Color(0xFFD93025),
                             fontSize = 11.sp
                         )
                     }
@@ -463,7 +379,7 @@ fun LoginScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = SolarAmber),
                     enabled = tokenInput.trim().isNotBlank()
                 ) {
-                    Text("Connect", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Connect", color = PureWhite, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                 }
             },
             dismissButton = {
@@ -475,58 +391,67 @@ fun LoginScreen(
                 }
             },
             containerColor = SolarTheme.colors.cardBackground,
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(12.dp)
         )
     }
 }
 
 @Composable
-private fun FeaturePointCard(
-    icon: ImageVector,
-    title: String,
-    description: String
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(16.dp)),
-        color = SolarTheme.colors.cardBackground,
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.Top
+private fun FeatureRow(icon: ImageVector, title: String, description: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Box(
+            modifier = Modifier.size(36.dp).clip(CircleShape).background(SolarTheme.colors.primaryContainer),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(SolarTheme.colors.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = SolarAmber,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = title,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SolarTheme.colors.textPrimary
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = description,
-                    fontSize = 11.sp,
-                    color = SolarTheme.colors.textSecondary,
-                    lineHeight = 15.sp
-                )
-            }
+            Icon(icon, contentDescription = null, tint = SolarAmber, modifier = Modifier.size(18.dp))
         }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = SolarTheme.colors.textPrimary)
+            Spacer(Modifier.height(2.dp))
+            Text(description, fontSize = 13.sp, lineHeight = 18.sp, color = SolarTheme.colors.textSecondary)
+        }
+    }
+}
+
+/** App mark: rounded square in AdMob blue with a rising-trend glyph. */
+@Composable
+private fun BrandMark(size: Dp) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(size * 0.28f))
+            .background(SolarAmber),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+            contentDescription = null,
+            tint = PureWhite,
+            modifier = Modifier.size(size * 0.6f)
+        )
+    }
+}
+
+/** Multicolor Google "G" for the Sign in with Google button. */
+@Composable
+private fun GoogleGLogo(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val stroke = size.minDimension * 0.2f
+        val inset = stroke / 2f
+        val arcSize = Size(size.width - stroke, size.height - stroke)
+        val tl = Offset(inset, inset)
+        fun arc(color: Color, start: Float, sweep: Float) =
+            drawArc(color, start, sweep, useCenter = false, topLeft = tl, size = arcSize, style = Stroke(stroke))
+        arc(Color(0xFFEA4335), -150f, 105f)  // red (top)
+        arc(Color(0xFFFBBC05), 150f, 60f)    // yellow (left-bottom)
+        arc(Color(0xFF34A853), 45f, 105f)    // green (bottom)
+        arc(Color(0xFF4285F4), -20f, 65f)    // blue (right)
+        // crossbar
+        drawRect(
+            Color(0xFF4285F4),
+            topLeft = Offset(size.width / 2f, size.height / 2f - stroke / 2f),
+            size = Size(size.width / 2f - inset + stroke / 2f, stroke)
+        )
     }
 }

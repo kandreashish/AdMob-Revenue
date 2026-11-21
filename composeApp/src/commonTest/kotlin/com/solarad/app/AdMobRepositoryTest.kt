@@ -294,14 +294,14 @@ class AdMobRepositoryTest {
     @Test
     fun testAutoRefreshIntervalPersistence() {
         val settings = MapSettings()
-        val repo1 = AdMobRepository(settings = settings)
+        val repo1 = AdMobRepository(settings = settings, cacheFiles = null)
         assertEquals(AutoRefreshInterval.MINUTE_1, repo1.autoRefreshInterval.value)
 
         repo1.setAutoRefreshInterval(AutoRefreshInterval.MINUTES_5)
         assertEquals(AutoRefreshInterval.MINUTES_5, repo1.autoRefreshInterval.value)
 
         // New repo instance loading from same settings
-        val repo2 = AdMobRepository(settings = settings)
+        val repo2 = AdMobRepository(settings = settings, cacheFiles = null)
         assertEquals(AutoRefreshInterval.MINUTES_5, repo2.autoRefreshInterval.value)
     }
 
@@ -413,7 +413,7 @@ class AdMobRepositoryTest {
         settings.putString("solarad_cache_registered_apps", json.encodeToString(listOf(cachedApp)))
 
         // Instantiate repository without active network token, restoring entirely from offline cache
-        val repo = AdMobRepository(settings = settings)
+        val repo = AdMobRepository(settings = settings, cacheFiles = null)
 
         assertTrue(repo.session.value.isLoggedIn)
         assertEquals("Offline User", repo.session.value.userName)
@@ -440,7 +440,7 @@ class AdMobRepositoryTest {
     @Test
     fun testCustomDailyGoalPersistenceAndRecomputation() {
         val settings = MapSettings()
-        val repo1 = AdMobRepository(settings = settings)
+        val repo1 = AdMobRepository(settings = settings, cacheFiles = null)
 
         // Initially no custom goal set
         assertNull(repo1.customDailyGoal.value)
@@ -453,7 +453,7 @@ class AdMobRepositoryTest {
         assertTrue(repo1.accountSummary.value.isCustomGoal)
 
         // New repo instance with same settings restores the custom goal
-        val repo2 = AdMobRepository(settings = settings)
+        val repo2 = AdMobRepository(settings = settings, cacheFiles = null)
         assertEquals(250.0, repo2.customDailyGoal.value)
         assertEquals(250.0, repo2.accountSummary.value.dailyGoal)
         assertTrue(repo2.accountSummary.value.isCustomGoal)
@@ -475,7 +475,7 @@ class AdMobRepositoryTest {
 
         val customDaily = 100.0
 
-        // Today
+        // Today -> 1x daily goal
         val todaySummary = AdMobApiClient.computeAccountSummary(
             rows = rows,
             range = TimeRange.TODAY,
@@ -484,10 +484,12 @@ class AdMobRepositoryTest {
             customDailyGoal = customDaily
         )
         assertEquals(100.0, todaySummary.dailyGoal)
+        assertEquals(100.0, todaySummary.periodGoal)
+        assertEquals(1, todaySummary.periodDays)
         assertEquals(0.50f, todaySummary.dailyGoalProgress)
         assertTrue(todaySummary.isCustomGoal)
 
-        // Last 7 Days -> 7x daily goal
+        // Last 7 Days -> base daily goal is 100, periodGoal is 700
         val summary7d = AdMobApiClient.computeAccountSummary(
             rows = rows,
             range = TimeRange.LAST_7_DAYS,
@@ -495,12 +497,14 @@ class AdMobRepositoryTest {
             today = testDate,
             customDailyGoal = customDaily
         )
-        assertEquals(700.0, summary7d.dailyGoal)
+        assertEquals(100.0, summary7d.dailyGoal)
+        assertEquals(700.0, summary7d.periodGoal)
+        assertEquals(7, summary7d.periodDays)
         // 50 + 40 + 60 = 150.0 -> 150.0 / 700.0 ~ 0.214f
         assertTrue(summary7d.dailyGoalProgress > 0.21f && summary7d.dailyGoalProgress < 0.22f)
         assertTrue(summary7d.isCustomGoal)
 
-        // Past 30 Days -> 30x daily goal
+        // Past 30 Days -> base daily goal is 100, periodGoal is 3000
         val summary30d = AdMobApiClient.computeAccountSummary(
             rows = rows,
             range = TimeRange.DAYS_30,
@@ -508,7 +512,9 @@ class AdMobRepositoryTest {
             today = testDate,
             customDailyGoal = customDaily
         )
-        assertEquals(3000.0, summary30d.dailyGoal)
+        assertEquals(100.0, summary30d.dailyGoal)
+        assertEquals(3000.0, summary30d.periodGoal)
+        assertEquals(30, summary30d.periodDays)
         assertTrue(summary30d.isCustomGoal)
 
         // Custom Date Range: 10 days -> 10x daily goal
@@ -523,8 +529,88 @@ class AdMobRepositoryTest {
             customEndDate = end,
             customDailyGoal = customDaily
         )
-        assertEquals(1000.0, summaryCustom.dailyGoal)
+        assertEquals(100.0, summaryCustom.dailyGoal)
+        assertEquals(1000.0, summaryCustom.periodGoal)
+        assertEquals(10, summaryCustom.periodDays)
         assertTrue(summaryCustom.isCustomGoal)
+    }
+
+    @Test
+    fun testGoalProgressUncappedWhenExceedingTarget() {
+        val testDate = LocalDate(2026, 11, 19)
+        val rows = listOf(
+            AdMobReportRow("20261119", "app1", "App", "Banner", "US", 150.0, 15000, 300)
+        )
+        val summary = AdMobApiClient.computeAccountSummary(
+            rows = rows,
+            range = TimeRange.TODAY,
+            publisherId = "pub-test",
+            today = testDate,
+            customDailyGoal = 100.0
+        )
+        assertEquals(100.0, summary.dailyGoal)
+        assertEquals(100.0, summary.periodGoal)
+        // 150 / 100 = 1.5f (150% achievement, un-clamped)
+        assertEquals(1.50f, summary.dailyGoalProgress)
+    }
+
+    @Test
+    fun testRepositoryFallbackScalesAcrossTimeRangesWhenOfflineOrEmpty() {
+        val settings = MapSettings()
+        val repo = AdMobRepository(settings = settings, cacheFiles = null)
+        repo.setCustomDailyGoal(100.0)
+
+        // Today default
+        assertEquals(100.0, repo.accountSummary.value.dailyGoal)
+        assertEquals(100.0, repo.accountSummary.value.periodGoal)
+        assertEquals(1, repo.accountSummary.value.periodDays)
+
+        // Switch to Last 7 Days
+        repo.setTimeRange(TimeRange.LAST_7_DAYS)
+        assertEquals(100.0, repo.accountSummary.value.dailyGoal)
+        assertEquals(700.0, repo.accountSummary.value.periodGoal)
+        assertEquals(7, repo.accountSummary.value.periodDays)
+
+        // Switch to 30 Days
+        repo.setTimeRange(TimeRange.DAYS_30)
+        assertEquals(100.0, repo.accountSummary.value.dailyGoal)
+        assertEquals(3000.0, repo.accountSummary.value.periodGoal)
+        assertEquals(30, repo.accountSummary.value.periodDays)
+
+        // Switch to Custom Range 5 days
+        val start = LocalDate(2026, 11, 1)
+        val end = LocalDate(2026, 11, 5)
+        repo.setTimeRange(TimeRange.CUSTOM, start, end)
+        assertEquals(100.0, repo.accountSummary.value.dailyGoal)
+        assertEquals(500.0, repo.accountSummary.value.periodGoal)
+        assertEquals(5, repo.accountSummary.value.periodDays)
+    }
+
+    @Test
+    fun testAutoGoalUsesCompletedHistoricalDays() {
+        val testDate = LocalDate(2026, 11, 20)
+        // 7 completed days: 20261113..20261119 each with 100.0 -> avg = 100.0, computed goal = 100 * 1.25 rounded = 150.0
+        // today 20261120 only has partial 5.0 revenue (morning)
+        val rows = listOf(
+            AdMobReportRow("20261120", "app1", "App", "Banner", "US", 5.0, 500, 10),
+            AdMobReportRow("20261119", "app1", "App", "Banner", "US", 100.0, 10000, 200),
+            AdMobReportRow("20261118", "app1", "App", "Banner", "US", 100.0, 10000, 200),
+            AdMobReportRow("20261117", "app1", "App", "Banner", "US", 100.0, 10000, 200),
+            AdMobReportRow("20261116", "app1", "App", "Banner", "US", 100.0, 10000, 200),
+            AdMobReportRow("20261115", "app1", "App", "Banner", "US", 100.0, 10000, 200),
+            AdMobReportRow("20261114", "app1", "App", "Banner", "US", 100.0, 10000, 200),
+            AdMobReportRow("20261113", "app1", "App", "Banner", "US", 100.0, 10000, 200)
+        )
+        val summary = AdMobApiClient.computeAccountSummary(
+            rows = rows,
+            range = TimeRange.TODAY,
+            publisherId = "pub-test",
+            today = testDate
+        )
+        // Auto goal calculated from 7 completed days: 700 / 7 = 100 avg -> (100 * 1.25 / 50).round * 50 = 150.0
+        assertEquals(150.0, summary.dailyGoal)
+        assertEquals(150.0, summary.periodGoal)
+        assertFalse(summary.isCustomGoal)
     }
 
     @Test
@@ -572,7 +658,7 @@ class AdMobRepositoryTest {
         settings.putString("solarad_publisher_id", "pub-test")
         settings.putString("solarad_cache_report_rows", json.encodeToString(rows))
 
-        val repo = AdMobRepository(settings = settings)
+        val repo = AdMobRepository(settings = settings, cacheFiles = null)
         // Select Last 7 Days
         repo.setTimeRange(TimeRange.LAST_7_DAYS)
         // 50.0 + 70.0 + 80.0 = 200.0

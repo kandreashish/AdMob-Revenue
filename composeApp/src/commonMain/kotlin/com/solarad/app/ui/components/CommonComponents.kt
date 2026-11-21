@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -40,8 +42,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -113,7 +117,7 @@ fun SolarHeader(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(if (isOffline) SolarAmber else BotanicalGreen)
+                        .background(if (isOffline) com.solarad.app.theme.AdMobYellow else BotanicalGreen)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -172,10 +176,10 @@ fun <T> SolarPillTabs(
         ) {
             items.forEach { item ->
                 val isSelected = item == selectedItem
-                val bgColor by animateColorAsState(if (isSelected) SolarAmber else Color.Transparent)
+                val bgColor by animateColorAsState(if (isSelected) SolarTheme.colors.primaryContainer else Color.Transparent)
                 val textColor by animateColorAsState(
                     if (isSelected) {
-                        if (SolarTheme.colors.isDark) EspressoSlate else PureWhite
+                        if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.solarad.app.theme.AdMobSelectedText
                     } else {
                         SolarTheme.colors.textSecondary
                     }
@@ -221,7 +225,7 @@ fun MetricTwinCard(
             .shadow(
                 elevation = 2.dp,
                 shape = RoundedCornerShape(18.dp),
-                ambientColor = SolarAmber.copy(alpha = 0.08f),
+                ambientColor = Color.Black.copy(alpha = 0.06f),
                 spotColor = Color.Black.copy(alpha = 0.04f)
             )
             .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(18.dp)),
@@ -418,8 +422,8 @@ fun RevenueCurveChart(
         return
     }
 
-    val maxAmount = points.maxOfOrNull { it.amount } ?: 1.0
-    val minAmount = (points.minOfOrNull { it.amount } ?: 0.0) * 0.85
+    val maxAmount = remember(points) { points.maxOfOrNull { it.amount } ?: 1.0 }
+    val minAmount = remember(points) { (points.minOfOrNull { it.amount } ?: 0.0) * 0.85 }
     val range = (maxAmount - minAmount).coerceAtLeast(1.0)
     val dotCenterColor = SolarTheme.colors.cardBackground
 
@@ -429,85 +433,59 @@ fun RevenueCurveChart(
                 .fillMaxWidth()
                 .height(140.dp)
         ) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                val width = size.width
-                val height = size.height
-                val bottomPadding = 20.dp.toPx()
-                val usableHeight = (height - bottomPadding).coerceAtLeast(1f)
+            // drawWithCache: paths/brush/coords are rebuilt only when size or points change,
+            // not on every draw pass.
+            Spacer(
+                modifier = Modifier
+                    .matchParentSize()
+                    .drawWithCache {
+                        val width = size.width
+                        val height = size.height
+                        val bottomPadding = 20.dp.toPx()
+                        val usableHeight = (height - bottomPadding).coerceAtLeast(1f)
+                        if (points.size < 2) return@drawWithCache onDrawBehind {}
 
-                if (points.size < 2) return@Canvas
-
-                val stepX = width / (points.size - 1)
-                val path = Path()
-                val fillPath = Path()
-
-                val coords = points.mapIndexed { index, point ->
-                    val x = index * stepX
-                    val normalized = if (maxAmount > minAmount) {
-                        ((point.amount - minAmount) / range).toFloat().coerceIn(0f, 1f)
-                    } else {
-                        0.5f
-                    }
-                    val y = usableHeight - (normalized * (usableHeight * 0.75f))
-                    Offset(x, y)
-                }
-
-                // Smooth cubic bezier path
-                path.moveTo(coords.first().x, coords.first().y)
-                fillPath.moveTo(coords.first().x, coords.first().y)
-
-                for (i in 0 until coords.size - 1) {
-                    val p0 = coords[i]
-                    val p1 = coords[i + 1]
-                    val controlX1 = (p0.x + p1.x) / 2
-                    val controlY1 = p0.y
-                    val controlX2 = (p0.x + p1.x) / 2
-                    val controlY2 = p1.y
-
-                    path.cubicTo(controlX1, controlY1, controlX2, controlY2, p1.x, p1.y)
-                    fillPath.cubicTo(controlX1, controlY1, controlX2, controlY2, p1.x, p1.y)
-                }
-
-                // Fill gradient area below the curve
-                fillPath.lineTo(coords.last().x, usableHeight)
-                fillPath.lineTo(coords.first().x, usableHeight)
-                fillPath.close()
-
-                drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            SolarAmber.copy(alpha = 0.25f),
-                            SolarAmber.copy(alpha = 0.03f)
-                        ),
-                        startY = 0f,
-                        endY = usableHeight
-                    )
-                )
-
-                // Stroke line
-                drawPath(
-                    path = path,
-                    color = SolarAmber,
-                    style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
-                )
-
-                // Highlight peak/current point
-                coords.forEachIndexed { idx, pt ->
-                    if (points[idx].isCurrentOrPeak) {
-                        drawCircle(
-                            color = dotCenterColor,
-                            radius = 5.dp.toPx(),
-                            center = pt
+                        val stepX = width / (points.size - 1)
+                        val coords = points.mapIndexed { index, point ->
+                            val normalized = if (maxAmount > minAmount) {
+                                ((point.amount - minAmount) / range).toFloat().coerceIn(0f, 1f)
+                            } else 0.5f
+                            Offset(index * stepX, usableHeight - (normalized * (usableHeight * 0.75f)))
+                        }
+                        val path = Path()
+                        val fillPath = Path()
+                        path.moveTo(coords.first().x, coords.first().y)
+                        fillPath.moveTo(coords.first().x, coords.first().y)
+                        for (i in 0 until coords.size - 1) {
+                            val p0 = coords[i]
+                            val p1 = coords[i + 1]
+                            val cx = (p0.x + p1.x) / 2
+                            path.cubicTo(cx, p0.y, cx, p1.y, p1.x, p1.y)
+                            fillPath.cubicTo(cx, p0.y, cx, p1.y, p1.x, p1.y)
+                        }
+                        fillPath.lineTo(coords.last().x, usableHeight)
+                        fillPath.lineTo(coords.first().x, usableHeight)
+                        fillPath.close()
+                        val fillBrush = Brush.verticalGradient(
+                            colors = listOf(SolarAmber.copy(alpha = 0.25f), SolarAmber.copy(alpha = 0.03f)),
+                            startY = 0f,
+                            endY = usableHeight
                         )
-                        drawCircle(
-                            color = SolarAmber,
-                            radius = 3.5.dp.toPx(),
-                            center = pt
-                        )
+                        val stroke = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+                        val outerR = 5.dp.toPx()
+                        val innerR = 3.5.dp.toPx()
+                        val highlights = coords.filterIndexed { idx, _ -> points[idx].isCurrentOrPeak }
+
+                        onDrawBehind {
+                            drawPath(path = fillPath, brush = fillBrush)
+                            drawPath(path = path, color = SolarAmber, style = stroke)
+                            highlights.forEach { pt ->
+                                drawCircle(color = dotCenterColor, radius = outerR, center = pt)
+                                drawCircle(color = SolarAmber, radius = innerR, center = pt)
+                            }
+                        }
                     }
-                }
-            }
+            )
         }
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -533,6 +511,7 @@ fun RevenueCurveChart(
 enum class NavigationTab(val label: String, val activeIcon: ImageVector, val inactiveIcon: ImageVector) {
     TODAY("Today", Icons.Filled.Today, Icons.Outlined.Today),
     APPS("Apps", Icons.Filled.Apps, Icons.Outlined.Apps),
+    REPORTS("Reports", Icons.Filled.Assessment, Icons.Outlined.Assessment),
     ANALYTICS("Analytics", Icons.Filled.Analytics, Icons.Outlined.Analytics),
     WALLET("Wallet", Icons.Filled.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet)
 }
@@ -549,7 +528,7 @@ fun SolarBottomDock(
             .shadow(
                 elevation = 8.dp,
                 shape = RoundedCornerShape(999.dp),
-                ambientColor = SolarAmber.copy(alpha = 0.15f),
+                ambientColor = Color.Black.copy(alpha = 0.08f),
                 spotColor = Color.Black.copy(alpha = 0.08f)
             )
             .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(999.dp)),
@@ -565,21 +544,37 @@ fun SolarBottomDock(
         ) {
             NavigationTab.entries.forEach { tab ->
                 val isSelected = tab == currentTab
-                val tabBgColor by animateColorAsState(if (isSelected) SolarAmber else Color.Transparent)
+                val dockSpec = androidx.compose.animation.core.tween<Color>(250, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                val tabBgColor by animateColorAsState(
+                    if (isSelected) SolarTheme.colors.primaryContainer else SolarTheme.colors.primaryContainer.copy(alpha = 0f),
+                    animationSpec = dockSpec,
+                    label = "dockBg"
+                )
                 val iconTint by animateColorAsState(
                     if (isSelected) {
-                        if (SolarTheme.colors.isDark) EspressoSlate else PureWhite
+                        if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.solarad.app.theme.AdMobSelectedText
                     } else {
                         SolarTheme.colors.textSecondary
-                    }
+                    },
+                    animationSpec = dockSpec,
+                    label = "dockTint"
+                )
+                val hPad by androidx.compose.animation.core.animateDpAsState(
+                    if (isSelected) 10.dp else 8.dp,
+                    animationSpec = androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    label = "dockPad"
                 )
 
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
                         .background(tabBgColor)
-                        .clickable { onTabSelected(tab) }
-                        .padding(horizontal = if (isSelected) 10.dp else 8.dp, vertical = 6.dp),
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { onTabSelected(tab) }
+                        .animateContentSize(androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                        .padding(horizontal = hPad, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -594,7 +589,7 @@ fun SolarBottomDock(
                             text = tab.label,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (SolarTheme.colors.isDark) EspressoSlate else PureWhite,
+                            color = iconTint,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )

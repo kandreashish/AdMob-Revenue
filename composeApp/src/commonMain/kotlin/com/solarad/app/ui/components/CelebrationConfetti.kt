@@ -23,15 +23,15 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 private val ConfettiColors = listOf(
-    Color(0xFF10B981), // Botanical Green
-    Color(0xFFF59E0B), // Solar Amber
-    Color(0xFF0284C7), // Ocean Azure
-    Color(0xFFEF4444), // Coral Red
-    Color(0xFF8B5CF6), // Purple
-    Color(0xFFEC4899), // Pink
-    Color(0xFFFBBF24), // Gold
-    Color(0xFF34D399), // Mint Green
-    Color(0xFF38BDF8)  // Sky Blue
+    Color(0xFF1E8E3E), // Botanical Green
+    Color(0xFF1A73E8), // Solar Amber
+    Color(0xFF12B5CB), // Ocean Azure
+    Color(0xFFD93025), // Coral Red
+    Color(0xFF9334E6), // Purple
+    Color(0xFFE52592), // Pink
+    Color(0xFF4285F4), // Gold
+    Color(0xFF81C995), // Mint Green
+    Color(0xFF78D9EC)  // Sky Blue
 )
 
 private enum class ConfettiShape {
@@ -155,7 +155,9 @@ fun CelebrationConfetti(
         particles = emptyList()
     }
 
-    if (particles.isNotEmpty() && progressAnim.value < 1f) {
+    // Visibility depends only on the particle list; progress is read inside the draw phase,
+    // so the animation redraws the Canvas without recomposing the parent each frame.
+    if (particles.isNotEmpty()) {
         Canvas(modifier = modifier.fillMaxSize()) {
             val progress = progressAnim.value
             val width = size.width

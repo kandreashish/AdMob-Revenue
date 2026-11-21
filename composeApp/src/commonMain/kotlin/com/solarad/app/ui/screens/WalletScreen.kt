@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.solarad.app.ui.components.uniqueKeys
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -106,7 +108,7 @@ fun WalletScreen(
                     .shadow(
                         elevation = 3.dp,
                         shape = RoundedCornerShape(22.dp),
-                        ambientColor = SolarAmber.copy(alpha = 0.12f),
+                        ambientColor = Color.Black.copy(alpha = 0.06f),
                         spotColor = Color.Black.copy(alpha = 0.05f)
                     )
                     .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(22.dp)),
@@ -250,7 +252,7 @@ fun WalletScreen(
                     .shadow(
                         elevation = 2.dp,
                         shape = RoundedCornerShape(20.dp),
-                        ambientColor = SolarAmber.copy(alpha = 0.08f),
+                        ambientColor = Color.Black.copy(alpha = 0.06f),
                         spotColor = Color.Black.copy(alpha = 0.04f)
                     )
                     .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(20.dp)),
@@ -533,7 +535,8 @@ fun WalletScreen(
                 }
             }
         } else {
-            items(wallet.pastPayouts) { payout ->
+            val payoutKeys = uniqueKeys(wallet.pastPayouts) { "payout_" + it.id }
+            itemsIndexed(wallet.pastPayouts, key = { i, _ -> payoutKeys[i] }) { _, payout ->
                 PayoutTransferCard(
                     payout = payout,
                     isDownloaded = downloadedId == payout.id,

@@ -26,6 +26,51 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Process-wide repository holder. Survives Activity recreation (locale/theme/config changes)
+ * so we don't spin up a second repository + coroutine scope and leak the old Activity.
+ */
+private object RepositoryHolder {
+    @Volatile private var instance: AdMobRepository? = null
+
+    fun get(context: android.content.Context): AdMobRepository =
+        instance ?: synchronized(this) {
+            instance ?: run {
+                val app = context.applicationContext
+                initAndroidSettings(app)
+                AdMobRepository().also { repo ->
+                    // Uses only applicationContext: never captures an Activity
+                    repo.tokenRefresher = {
+                        withContext(Dispatchers.IO) {
+                            try {
+                                GoogleSignIn.getLastSignedInAccount(app)?.let { renewAdMobToken(app, repo, it) }
+                            } catch (e: Exception) {
+                                Log.w("AdCashAuth", "Automatic token renewal failed: ${e.message}")
+                                null
+                            }
+                        }
+                    }
+                    instance = repo
+                }
+            }
+        }
+}
+
+private const val ADMOB_OAUTH_SCOPE = "oauth2:https://www.googleapis.com/auth/admob.readonly https://www.googleapis.com/auth/admob.report https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
+
+private fun renewAdMobToken(context: android.content.Context, repository: AdMobRepository, account: GoogleSignInAccount): String? {
+    val app = context.applicationContext
+    val email = account.email ?: ""
+    val androidAccount = account.account ?: Account(email, "com.google")
+    val staleToken = repository.getCurrentToken()
+    if (!staleToken.isNullOrBlank()) {
+        try {
+            GoogleAuthUtil.clearToken(app, staleToken)
+        } catch (_: Exception) {}
+    }
+    return GoogleAuthUtil.getToken(app, androidAccount, ADMOB_OAUTH_SCOPE)
+}
+
 class MainActivity : ComponentActivity() {
     private lateinit var repository: AdMobRepository
     private lateinit var googleSignInClient: GoogleSignInClient
@@ -88,7 +133,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Requesting AdMob OAuth token for $email...")
-                val token = GoogleAuthUtil.getToken(this@MainActivity, androidAccount, ADMOB_SCOPE)
+                val token = GoogleAuthUtil.getToken(applicationContext, androidAccount, ADMOB_SCOPE)
                 Log.d(TAG, "Successfully acquired AdMob OAuth token!")
                 withContext(Dispatchers.Main) {
                     Toast.makeText(this@MainActivity, "Signed in as $name", Toast.LENGTH_SHORT).show()
@@ -118,37 +163,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun renewAdMobToken(account: GoogleSignInAccount): String? {
-        val email = account.email ?: ""
-        val androidAccount = account.account ?: Account(email, "com.google")
-        val staleToken = repository.getCurrentToken()
-        if (!staleToken.isNullOrBlank()) {
-            try {
-                GoogleAuthUtil.clearToken(this, staleToken)
-            } catch (_: Exception) {}
-        }
-        return GoogleAuthUtil.getToken(this, androidAccount, ADMOB_SCOPE)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        initAndroidSettings(this)
-        repository = AdMobRepository()
-
-        // Hook up automatic silent token refresher so tokens never expire
-        repository.tokenRefresher = {
-            withContext(Dispatchers.IO) {
-                try {
-                    GoogleSignIn.getLastSignedInAccount(this@MainActivity)?.let { renewAdMobToken(it) }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Automatic token renewal failed: ${e.message}")
-                    null
-                }
-            }
-        }
+        // Reuse the process-wide repository (token refresher is wired there with applicationContext)
+        repository = RepositoryHolder.get(this)
 
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(WEB_CLIENT_ID)
@@ -164,14 +186,14 @@ class MainActivity : ComponentActivity() {
 
         // If user is already signed in on device, sync photo and silently renew token on startup
         val lastAccount = GoogleSignIn.getLastSignedInAccount(this)
-        if (lastAccount != null) {
+        if (lastAccount != null && savedInstanceState == null) {
             val photoUrl = lastAccount.photoUrl?.toString()
             if (!photoUrl.isNullOrBlank()) {
                 repository.updateAvatarUrl(photoUrl)
             }
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val freshToken = renewAdMobToken(lastAccount)
+                    val freshToken = renewAdMobToken(applicationContext, repository, lastAccount)
                     if (!freshToken.isNullOrBlank()) {
                         withContext(Dispatchers.Main) {
                             repository.updateAccessToken(freshToken)

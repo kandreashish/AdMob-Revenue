@@ -49,6 +49,8 @@ fun SetGoalDialog(
     currentGoal: Double,
     currencySymbol: String = "$",
     isCustomGoal: Boolean = false,
+    selectedRange: com.solarad.app.model.TimeRange? = null,
+    periodDays: Int = 1,
     onDismiss: () -> Unit,
     onSaveGoal: (Double) -> Unit,
     onResetToAuto: (() -> Unit)? = null
@@ -178,6 +180,51 @@ fun SetGoalDialog(
                         cursorColor = SolarAmber
                     )
                 )
+
+                if (periodDays > 1) {
+                    val parsedDaily = goalInput.trim().toDoubleOrNull() ?: 0.0
+                    val scaledPeriodGoal = parsedDaily * periodDays
+                    val periodTitle = when (selectedRange) {
+                        com.solarad.app.model.TimeRange.LAST_7_DAYS -> "Past 7 Days"
+                        com.solarad.app.model.TimeRange.THIS_MONTH -> "This Month ($periodDays days)"
+                        com.solarad.app.model.TimeRange.DAYS_30 -> "Past 30 Days"
+                        com.solarad.app.model.TimeRange.CUSTOM -> "Custom Range ($periodDays days)"
+                        else -> "$periodDays Days"
+                    }
+                    val formattedPeriodGoal = if (scaledPeriodGoal % 1.0 == 0.0) {
+                        scaledPeriodGoal.toLong().toString()
+                    } else {
+                        com.solarad.app.ui.utils.formatAmount(scaledPeriodGoal)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = SolarAmber.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, SolarAmber.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "PERIOD TARGET PREVIEW",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SolarAmber,
+                                letterSpacing = 0.5.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "$periodTitle: $currencySymbol$formattedPeriodGoal",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SolarTheme.colors.textPrimary
+                            )
+                            Text(
+                                text = "Automatically scaled ($currencySymbol${if (goalInput.isBlank()) "0" else goalInput}/day × $periodDays days)",
+                                fontSize = 11.sp,
+                                color = SolarTheme.colors.textSecondary
+                            )
+                        }
+                    }
+                }
 
                 if (inputError != null) {
                     Text(

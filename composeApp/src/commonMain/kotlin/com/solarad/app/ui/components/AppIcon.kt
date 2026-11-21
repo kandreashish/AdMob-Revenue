@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.PhoneIphone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,14 +42,14 @@ import com.solarad.app.theme.SolarTheme
 import kotlin.math.abs
 
 private val AppGradientPalettes = listOf(
-    listOf(Color(0xFFF59E0B), Color(0xFFEF4444)), // Amber to Coral
-    listOf(Color(0xFF0284C7), Color(0xFF1E40AF)), // Azure to Deep Blue
-    listOf(Color(0xFF10B981), Color(0xFF047857)), // Emerald to Forest
-    listOf(Color(0xFF8B5CF6), Color(0xFF6366F1)), // Violet to Indigo
-    listOf(Color(0xFFEC4899), Color(0xFFBE185D)), // Pink to Crimson
-    listOf(Color(0xFFF97316), Color(0xFFFBBF24)), // Orange to Gold
+    listOf(Color(0xFF1A73E8), Color(0xFFD93025)), // Amber to Coral
+    listOf(Color(0xFF12B5CB), Color(0xFF185ABC)), // Azure to Deep Blue
+    listOf(Color(0xFF1E8E3E), Color(0xFF137333)), // Emerald to Forest
+    listOf(Color(0xFF9334E6), Color(0xFF4285F4)), // Violet to Indigo
+    listOf(Color(0xFFE52592), Color(0xFFB80672)), // Pink to Crimson
+    listOf(Color(0xFFF97316), Color(0xFF4285F4)), // Orange to Gold
     listOf(Color(0xFF06B6D4), Color(0xFF0F766E)), // Cyan to Teal
-    listOf(Color(0xFF6366F1), Color(0xFF3730A3))  // Indigo to Midnight
+    listOf(Color(0xFF4285F4), Color(0xFF1967D2))  // Indigo to Midnight
 )
 
 private fun getInitials(name: String): String {
@@ -68,18 +70,27 @@ fun AppIcon(
     size: Dp = 38.dp,
     showPlatformBadge: Boolean = true
 ) {
-    val updates by AppIconResolver.iconUpdates.collectAsState()
-    val resolvedUrl = updates[app.id] ?: AppIconResolver.getCachedIconUrl(app)
+    // Observe only THIS app's icon url so one resolved icon doesn't recompose every icon in the list
+    val updatedUrlFlow = remember(app.id) {
+        AppIconResolver.iconUpdates
+            .map { it[app.id] }
+            .distinctUntilChanged()
+    }
+    val updatedUrl by updatedUrlFlow.collectAsState(initial = AppIconResolver.iconUpdates.value[app.id])
+    val resolvedUrl = updatedUrl ?: AppIconResolver.getCachedIconUrl(app)
 
-    var bitmap by remember(resolvedUrl) { mutableStateOf<ImageBitmap?>(null) }
+    // Key on app.id so the state isn't wiped when resolvedUrl goes from null → URL
+    var bitmap by remember(app.id) { mutableStateOf(AvatarImageLoader.peek(resolvedUrl)) }
 
     LaunchedEffect(app.id, app.appStoreId, app.name) {
         AppIconResolver.requestIconResolve(app)
     }
 
+    // Load (or reload) the bitmap whenever a new URL becomes available
     LaunchedEffect(resolvedUrl) {
-        if (!resolvedUrl.isNullOrBlank()) {
-            bitmap = AvatarImageLoader.load(resolvedUrl)
+        if (!resolvedUrl.isNullOrBlank() && bitmap == null) {
+            val loaded = AvatarImageLoader.load(resolvedUrl)
+            if (loaded != null) bitmap = loaded
         }
     }
 
@@ -102,7 +113,7 @@ fun AppIcon(
             // Elegant Monogram Tile
             val paletteIndex = abs(app.name.hashCode()) % AppGradientPalettes.size
             val gradientColors = AppGradientPalettes[paletteIndex]
-            val initials = getInitials(app.name)
+            val initials = remember(app.name) { getInitials(app.name) }
 
             Box(
                 modifier = Modifier

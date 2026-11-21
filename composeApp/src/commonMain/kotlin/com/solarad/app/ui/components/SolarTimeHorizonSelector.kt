@@ -75,6 +75,7 @@ fun SolarTimeHorizonSelector(
             CompactHorizonItem(TimeRange.TODAY, "Today", isLive = true),
             CompactHorizonItem(TimeRange.YESTERDAY, "Y'day"),
             CompactHorizonItem(TimeRange.LAST_7_DAYS, "7D"),
+            CompactHorizonItem(TimeRange.THIS_MONTH, "Month"),
             CompactHorizonItem(TimeRange.DAYS_30, "30D"),
             CompactHorizonItem(TimeRange.CUSTOM, "Custom", showEditIcon = true)
         )
@@ -99,16 +100,18 @@ fun SolarTimeHorizonSelector(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
+                val containerColor = SolarTheme.colors.primaryContainer
+                val activeBgGradient = remember(containerColor) {
+                    Brush.horizontalGradient(colors = listOf(containerColor, containerColor))
+                }
                 items.forEach { item ->
                     val isSelected = item.range == selectedRange
                     val elevation by animateDpAsState(
                         targetValue = if (isSelected) 2.dp else 0.dp,
                         animationSpec = spring(stiffness = 500f)
                     )
-                    val activeBgGradient = Brush.horizontalGradient(
-                        colors = listOf(SolarAmber, Color(0xFFD97706))
-                    )
-                    val activeContentColor = if (SolarTheme.colors.isDark) EspressoSlate else PureWhite
+
+                    val activeContentColor = if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.solarad.app.theme.AdMobSelectedText
 
                     Surface(
                         modifier = Modifier
@@ -117,8 +120,8 @@ fun SolarTimeHorizonSelector(
                             .shadow(
                                 elevation = elevation,
                                 shape = RoundedCornerShape(11.dp),
-                                ambientColor = if (isSelected) SolarAmber.copy(alpha = if (SolarTheme.colors.isDark) 0.25f else 0.35f) else Color.Transparent,
-                                spotColor = if (isSelected) (if (SolarTheme.colors.isDark) SolarAmber.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.15f)) else Color.Transparent
+                                ambientColor = Color.Transparent,
+                                spotColor = Color.Transparent
                             )
                             .clip(RoundedCornerShape(11.dp))
                             .clickable(
@@ -170,7 +173,7 @@ fun SolarTimeHorizonSelector(
 
                                 Text(
                                     text = item.label,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                                     color = if (isSelected) activeContentColor else SolarTheme.colors.textSecondary,
                                     maxLines = 1,
@@ -214,6 +217,7 @@ fun SolarTimeHorizonSelector(
                             TimeRange.TODAY -> "Live updates • Real-time AdMob sync"
                             TimeRange.YESTERDAY -> "Finalized 24h ledger • Yesterday"
                             TimeRange.LAST_7_DAYS -> "Rolling 7-day trend"
+                            TimeRange.THIS_MONTH -> "Month to date • vs same days last month"
                             TimeRange.DAYS_30 -> "Rolling 30-day view"
                             TimeRange.CUSTOM -> if (!customDateLabel.isNullOrBlank()) "Custom: $customDateLabel" else "Custom date filter"
                         },

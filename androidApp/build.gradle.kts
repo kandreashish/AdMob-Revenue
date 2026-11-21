@@ -1,8 +1,28 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.googleServices)
 }
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { (this as Properties).load(it) }
+    }
+}
+
+fun findProp(key: String, envKey: String): String? {
+    return (project.findProperty(key) as? String)
+        ?: localProperties.getProperty(key)
+        ?: System.getenv(envKey)
+}
+
+val releaseKeystorePath = findProp("release.keystore.path", "RELEASE_KEYSTORE_PATH")
+val releaseKeystorePassword = findProp("release.keystore.password", "RELEASE_KEYSTORE_PASSWORD")
+val releaseKeyAlias = findProp("release.key.alias", "RELEASE_KEY_ALIAS")
+val releaseKeyPassword = findProp("release.key.password", "RELEASE_KEY_PASSWORD")
 
 android {
     namespace = "com.lavish.admob.android"
@@ -19,10 +39,37 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        create("release") {
+            if (!releaseKeystorePath.isNullOrBlank() &&
+                !releaseKeystorePassword.isNullOrBlank() &&
+                !releaseKeyAlias.isNullOrBlank() &&
+                !releaseKeyPassword.isNullOrBlank()
+            ) {
+                storeFile = rootProject.file(releaseKeystorePath)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             resValue("string", "app_name", "AdDash")
+
+            val releaseSigning = signingConfigs.getByName("release")
+            signingConfig = if (releaseSigning.storeFile != null && releaseSigning.storeFile!!.exists()) {
+                releaseSigning
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
         getByName("debug") {
             isMinifyEnabled = false
@@ -43,7 +90,15 @@ android {
     }
 
     packaging {
-        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+        resources {
+            excludes += listOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "/META-INF/LICENSE*",
+                "/META-INF/NOTICE*",
+                "/META-INF/DEPENDENCIES",
+                "/META-INF/*.version"
+            )
+        }
     }
 }
 

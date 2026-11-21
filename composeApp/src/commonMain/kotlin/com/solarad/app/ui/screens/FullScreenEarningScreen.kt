@@ -1,6 +1,8 @@
 package com.solarad.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -80,51 +82,26 @@ fun FullScreenEarningScreen(
     // 2. Track increases to today's earnings to trigger celebration confetti
     var celebrationTrigger by remember { mutableStateOf(0) }
     var previousRevenue by remember { mutableStateOf<Double?>(null) }
+    // Bounce plays on EVERY increase; value is read only in graphicsLayer (draw phase), no recomposition
+    val bounce = remember { Animatable(1f) }
 
     LaunchedEffect(summary.todayRevenue) {
         val prev = previousRevenue
+        previousRevenue = summary.todayRevenue
         if (prev != null && summary.todayRevenue > prev) {
             celebrationTrigger++
+            bounce.animateTo(1.04f, tween(140, easing = FastOutSlowInEasing))
+            bounce.animateTo(1f, tween(220, easing = FastOutSlowInEasing))
         }
-        previousRevenue = summary.todayRevenue
     }
-
-    // Subtle scale bounce when number updates or confetti fires
-    val scaleAnim by animateFloatAsState(
-        targetValue = if (celebrationTrigger > 0) 1.04f else 1.0f,
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-        finishedListener = {
-            // return to neutral
-        }
-    )
-
-    // Gentle upward pulse for the green arrow
-    val infiniteTransition = rememberInfiniteTransition()
-    val arrowFloatOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
-    val liveDotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
 
     // Distraction-free deep OLED background styling
     val isDark = SolarTheme.colors.isDark
-    val bgColor = if (isDark) Color(0xFF0A0908) else Color(0xFF0F172A)
-    val textPrimaryColor = Color(0xFFF8FAFC)
-    val textSecondaryColor = Color(0xFF94A3B8)
-    val neonGreen = Color(0xFF10B981)
-    val neonGreenGlow = Color(0xFF34D399)
+    val bgColor = if (isDark) Color(0xFF0A0908) else Color(0xFF202124)
+    val textPrimaryColor = Color(0xFFF8F9FA)
+    val textSecondaryColor = Color(0xFF9AA0A6)
+    val neonGreen = Color(0xFF1E8E3E)
+    val neonGreenGlow = Color(0xFF81C995)
 
     // Controls visibility: auto-fades for absolute zero-distraction
     var showControls by remember { mutableStateOf(true) }
@@ -177,12 +154,7 @@ fun FullScreenEarningScreen(
                 horizontalArrangement = Arrangement.Center
             ) {
                 // Pulsing Live Dot
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(neonGreen.copy(alpha = liveDotAlpha))
-                )
+                LiveDot(color = neonGreen)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "TODAY'S EARNINGS",
@@ -199,7 +171,10 @@ fun FullScreenEarningScreen(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.scale(scaleAnim)
+                modifier = Modifier.graphicsLayer {
+                    scaleX = bounce.value
+                    scaleY = bounce.value
+                }
             ) {
                 // Green Arrow Going Up
                 Surface(
@@ -213,14 +188,7 @@ fun FullScreenEarningScreen(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                            contentDescription = "Earnings Going Up",
-                            tint = neonGreenGlow,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .scale(1f + (arrowFloatOffset / 60f))
-                        )
+                        PulsingArrow(tint = neonGreenGlow)
                     }
                 }
 
@@ -321,4 +289,53 @@ fun FullScreenEarningScreen(
             particleCount = 140
         )
     }
+}
+
+
+/** Isolated so its infinite animation only invalidates this layer's draw, not the whole HUD. */
+@Composable
+private fun LiveDot(color: Color) {
+    val t = rememberInfiniteTransition(label = "liveDot")
+    val alpha = t.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "liveDotAlpha"
+    )
+    Box(
+        modifier = Modifier
+            .size(8.dp)
+            .graphicsLayer { this.alpha = alpha.value }
+            .clip(CircleShape)
+            .background(color)
+    )
+}
+
+@Composable
+private fun PulsingArrow(tint: Color) {
+    val t = rememberInfiniteTransition(label = "arrow")
+    val offset = t.animateFloat(
+        initialValue = 0f,
+        targetValue = -6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "arrowOffset"
+    )
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+        contentDescription = "Earnings Going Up",
+        tint = tint,
+        modifier = Modifier
+            .size(40.dp)
+            .graphicsLayer {
+                val sc = 1f + (offset.value / 60f)
+                scaleX = sc
+                scaleY = sc
+            }
+    )
 }

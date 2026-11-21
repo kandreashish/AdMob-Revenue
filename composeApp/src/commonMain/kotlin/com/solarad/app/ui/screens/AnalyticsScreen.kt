@@ -30,6 +30,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,7 +116,7 @@ fun AnalyticsScreen(
                     .shadow(
                         elevation = 2.dp,
                         shape = RoundedCornerShape(20.dp),
-                        ambientColor = SolarAmber.copy(alpha = 0.08f),
+                        ambientColor = Color.Black.copy(alpha = 0.06f),
                         spotColor = Color.Black.copy(alpha = 0.04f)
                     )
                     .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(20.dp)),
@@ -207,7 +208,7 @@ fun AnalyticsScreen(
                             horizontalAlignment = Alignment.Start
                         ) {
                             Text("Peak Period", fontSize = 10.sp, color = SolarTheme.colors.textSecondary, maxLines = 1)
-                            val peak = analytics.trendPoints.maxByOrNull { it.amount }
+                            val peak = remember(analytics.trendPoints) { analytics.trendPoints.maxByOrNull { it.amount } }
                             Text(
                                 text = if (peak != null && peak.amount > 0) "${peak.dayLabel}: $${formatAmount(peak.amount)}" else "N/A",
                                 fontSize = 11.sp,
@@ -223,9 +224,11 @@ fun AnalyticsScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text("Daily Average", fontSize = 10.sp, color = SolarTheme.colors.textSecondary, maxLines = 1)
-                            val avg = if (analytics.trendPoints.isNotEmpty()) {
-                                (analytics.totalRevenue / analytics.trendPoints.size * 100.0).roundToLong() / 100.0
-                            } else 0.0
+                            val avg = remember(analytics.totalRevenue, analytics.trendPoints.size) {
+                                if (analytics.trendPoints.isNotEmpty()) {
+                                    (analytics.totalRevenue / analytics.trendPoints.size * 100.0).roundToLong() / 100.0
+                                } else 0.0
+                            }
                             Text(
                                 text = "$${formatAmount(avg)}/d",
                                 fontSize = 11.sp,
@@ -292,7 +295,7 @@ fun AnalyticsScreen(
                     .shadow(
                         elevation = 2.dp,
                         shape = RoundedCornerShape(20.dp),
-                        ambientColor = SolarAmber.copy(alpha = 0.08f),
+                        ambientColor = Color.Black.copy(alpha = 0.06f),
                         spotColor = Color.Black.copy(alpha = 0.04f)
                     )
                     .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(20.dp)),
@@ -399,7 +402,7 @@ fun AnalyticsScreen(
                         onClick = onExportReport,
                         colors = ButtonDefaults.elevatedButtonColors(
                             containerColor = SolarAmber,
-                            contentColor = if (SolarTheme.colors.isDark) EspressoSlate else PureWhite
+                            contentColor = PureWhite
                         ),
                         shape = RoundedCornerShape(999.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)

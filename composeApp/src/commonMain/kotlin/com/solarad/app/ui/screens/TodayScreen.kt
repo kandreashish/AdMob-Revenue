@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.solarad.app.ui.components.uniqueKeys
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,9 +118,9 @@ fun TodayScreen(
     var showCustomDateDialog by remember { mutableStateOf(false) }
     var showSetGoalDialog by remember { mutableStateOf(false) }
 
-    val dynamicTodayTitle = remember {
-        val now = Clock.System.now()
-        val today = now.toLocalDateTime(TimeZone.currentSystemDefault()).date
+    val currentDate by rememberCurrentDate()
+    val dynamicTodayTitle = remember(currentDate) {
+        val today = currentDate
         val monthStr = when (today.month) {
             Month.JANUARY -> "Jan"
             Month.FEBRUARY -> "Feb"
@@ -149,6 +151,7 @@ fun TodayScreen(
                     TimeRange.TODAY -> dynamicTodayTitle
                     TimeRange.YESTERDAY -> "Yesterday's Performance"
                     TimeRange.LAST_7_DAYS -> "Past 7 Days"
+                    TimeRange.THIS_MONTH -> "This Month"
                     TimeRange.DAYS_30 -> "Past 30 Days"
                     TimeRange.CUSTOM -> "Custom Range"
                 },
@@ -188,24 +191,17 @@ fun TodayScreen(
                 } else {
                     SolarAmberGlow.copy(alpha = 0.45f)
                 }
+                // AdMob "Total estimated earnings" card: dark grey with white text
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .shadow(
-                            elevation = 4.dp,
-                            shape = RoundedCornerShape(24.dp),
-                            ambientColor = SolarAmber.copy(alpha = 0.18f),
-                            spotColor = Color.Black.copy(alpha = 0.05f)
-                        )
-                        .border(1.dp, SolarAmber.copy(alpha = 0.35f), RoundedCornerShape(24.dp)),
-                    color = SolarTheme.colors.cardBackground,
-                    shape = RoundedCornerShape(24.dp)
+                        .padding(horizontal = 16.dp),
+                    color = com.solarad.app.theme.AdMobHeroGrey,
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Column(
                         modifier = Modifier
-                            .background(heroGlow)
-                            .padding(18.dp)
+                                                        .padding(18.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -219,7 +215,7 @@ fun TodayScreen(
                                 Icon(
                                     imageVector = Icons.Default.WbSunny,
                                     contentDescription = null,
-                                    tint = SolarAmber,
+                                    tint = Color(0xFFE8EAED),
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -228,12 +224,13 @@ fun TodayScreen(
                                         TimeRange.TODAY -> "Today's Earnings"
                                         TimeRange.YESTERDAY -> "Yesterday's Final"
                                         TimeRange.LAST_7_DAYS -> "Last 7 Days Revenue"
+                                        TimeRange.THIS_MONTH -> "This Month Revenue"
                                         TimeRange.DAYS_30 -> "Last 30 Days Revenue"
                                         TimeRange.CUSTOM -> "Custom Range Revenue"
                                     },
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = SolarTheme.colors.textSecondary,
+                                    color = Color(0xFFE8EAED),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -245,12 +242,8 @@ fun TodayScreen(
                             ) {
                                 // Delta Badge
                                 val isPositive = targetSummary.deltaAmount >= 0.0
-                                val deltaBadgeColor = if (isPositive) BotanicalGreen else CoralCrimson
-                                val deltaBadgeBg = if (isPositive) {
-                                    SolarTheme.colors.successContainer
-                                } else {
-                                    SolarTheme.colors.errorContainer
-                                }
+                                val deltaBadgeColor = if (isPositive) Color(0xFF81C995) else Color(0xFFF28B82)
+                                val deltaBadgeBg = Color.White.copy(alpha = 0.12f)
 
                                 Surface(
                                     color = deltaBadgeBg,
@@ -280,9 +273,9 @@ fun TodayScreen(
                                 // Full Screen Distraction-Free Button
                                 if (onOpenFullScreen != null) {
                                     Surface(
-                                        color = SolarTheme.colors.surfaceVariant.copy(alpha = 0.85f),
+                                        color = Color.White.copy(alpha = 0.12f),
                                         shape = CircleShape,
-                                        border = BorderStroke(1.dp, SolarTheme.colors.borderSubtle),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
                                         modifier = Modifier
                                             .size(28.dp)
                                             .clip(CircleShape)
@@ -292,7 +285,7 @@ fun TodayScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Fullscreen,
                                                 contentDescription = "Full Screen Landscape Mode",
-                                                tint = SolarTheme.colors.textPrimary,
+                                                tint = Color.White,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -307,8 +300,8 @@ fun TodayScreen(
                         Text(
                             text = "${targetSummary.currencySymbol}${formatAmount(targetSummary.todayRevenue)}",
                             fontSize = 32.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = SolarTheme.colors.textPrimary,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.White,
                             letterSpacing = (-0.02).sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -332,7 +325,7 @@ fun TodayScreen(
                                     },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (isGoalAchieved) BotanicalGreen else SolarTheme.colors.textPrimary,
+                                    color = if (isGoalAchieved) Color(0xFF81C995) else Color.White,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false)
@@ -340,11 +333,11 @@ fun TodayScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
 
                                 Surface(
-                                    color = SolarTheme.colors.surfaceVariant.copy(alpha = 0.8f),
+                                    color = Color.White.copy(alpha = 0.12f),
                                     shape = RoundedCornerShape(999.dp),
                                     border = BorderStroke(
                                         1.dp,
-                                        if (targetSummary.isCustomGoal) SolarAmber.copy(alpha = 0.5f) else SolarTheme.colors.borderSubtle
+                                        if (targetSummary.isCustomGoal) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.25f)
                                     ),
                                     modifier = Modifier.clickable(enabled = onSetDailyGoal != null) {
                                         showSetGoalDialog = true
@@ -357,27 +350,27 @@ fun TodayScreen(
                                         Icon(
                                             imageVector = Icons.Default.Edit,
                                             contentDescription = "Edit Goal",
-                                            tint = if (targetSummary.isCustomGoal) SolarAmber else SolarTheme.colors.textSecondary,
+                                            tint = if (targetSummary.isCustomGoal) Color.White else Color(0xFFE8EAED),
                                             modifier = Modifier.size(10.dp)
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
-                                        val formattedGoal = if (targetSummary.dailyGoal % 1.0 == 0.0) {
-                                            targetSummary.dailyGoal.toInt().toString()
+                                        val formattedGoal = if (targetSummary.periodGoal % 1.0 == 0.0) {
+                                            targetSummary.periodGoal.toInt().toString()
                                         } else {
-                                            formatAmount(targetSummary.dailyGoal)
+                                            formatAmount(targetSummary.periodGoal)
                                         }
                                         Text(
                                             text = "Goal: ${targetSummary.currencySymbol}$formattedGoal${if (targetSummary.isCustomGoal) "" else " (Auto)"}",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = if (targetSummary.isCustomGoal) SolarAmber else SolarTheme.colors.textSecondary,
+                                            color = if (targetSummary.isCustomGoal) Color.White else Color(0xFFE8EAED),
                                             maxLines = 1
                                         )
                                     }
                                 }
                             }
                             Spacer(modifier = Modifier.height(5.dp))
-                            val progressColor = if (targetSummary.dailyGoalProgress >= 1f) BotanicalGreen else SolarAmber
+                            val progressColor = if (targetSummary.dailyGoalProgress >= 1f) Color(0xFF81C995) else Color(0xFF8AB4F8)
                             LinearProgressIndicator(
                                 progress = { targetSummary.dailyGoalProgress.coerceIn(0f, 1f) },
                                 modifier = Modifier
@@ -385,7 +378,7 @@ fun TodayScreen(
                                     .height(6.dp)
                                     .clip(RoundedCornerShape(999.dp)),
                                 color = progressColor,
-                                trackColor = SolarTheme.colors.surfaceVariant,
+                                trackColor = Color.White.copy(alpha = 0.2f),
                                 strokeCap = StrokeCap.Round
                             )
                         }
@@ -511,7 +504,9 @@ fun TodayScreen(
                 }
             }
         } else {
-            items(apps.take(4)) { app ->
+            val topApps = apps.take(4)
+            val topKeys = uniqueKeys(topApps) { "today_" + it.id }
+            itemsIndexed(topApps, key = { i, _ -> topKeys[i] }) { _, app ->
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -587,7 +582,7 @@ fun TodayScreen(
 
     if (showCustomDateDialog) {
         val now = remember { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date }
-        var startInput by remember { mutableStateOf(now.minus(30, DateTimeUnit.DAY).toString()) }
+        var startInput by remember { mutableStateOf(now.minus(29, DateTimeUnit.DAY).toString()) }
         var endInput by remember { mutableStateOf(now.toString()) }
         var inputError by remember { mutableStateOf<String?>(null) }
 
@@ -599,8 +594,13 @@ fun TodayScreen(
                         try {
                             val sDate = LocalDate.parse(startInput.trim())
                             val eDate = LocalDate.parse(endInput.trim())
+                            val earliest = now.minus(90, DateTimeUnit.DAY)
                             if (sDate > eDate) {
                                 inputError = "Start date must be before end date"
+                            } else if (eDate > now) {
+                                inputError = "End date can't be in the future"
+                            } else if (sDate < earliest) {
+                                inputError = "Only the last 90 days are synced (from $earliest)"
                             } else {
                                 showCustomDateDialog = false
                                 onSelectCustomRange?.invoke(sDate, eDate)
@@ -637,19 +637,22 @@ fun TodayScreen(
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        val monthStart = LocalDate(now.year, now.month, 1)
+                        val lastMonthEnd = monthStart.minus(1, DateTimeUnit.DAY)
+                        val lastMonthStart = LocalDate(lastMonthEnd.year, lastMonthEnd.month, 1)
                         listOf(
-                            "Last 7 Days" to 7,
-                            "Last 14 Days" to 14,
-                            "Last 30 Days" to 30,
-                            "Last 60 Days" to 60,
-                            "Last 90 Days" to 90
-                        ).forEach { (label, days) ->
+                            "This Month" to (monthStart to now),
+                            "Last Month" to (lastMonthStart to lastMonthEnd),
+                            "Last 14 Days" to (now.minus(13, DateTimeUnit.DAY) to now),
+                            "Last 60 Days" to (now.minus(59, DateTimeUnit.DAY) to now),
+                            "Last 90 Days" to (now.minus(89, DateTimeUnit.DAY) to now)
+                        ).forEach { (label, span) ->
                             Surface(
                                 shape = RoundedCornerShape(999.dp),
                                 color = SolarTheme.colors.surfaceVariant,
                                 modifier = Modifier.clickable {
-                                    startInput = now.minus(days, DateTimeUnit.DAY).toString()
-                                    endInput = now.toString()
+                                    startInput = span.first.toString()
+                                    endInput = span.second.toString()
                                     inputError = null
                                 }
                             ) {
@@ -700,6 +703,8 @@ fun TodayScreen(
             currentGoal = summary.dailyGoal,
             currencySymbol = summary.currencySymbol,
             isCustomGoal = summary.isCustomGoal,
+            selectedRange = selectedRange,
+            periodDays = summary.periodDays,
             onDismiss = { showSetGoalDialog = false },
             onSaveGoal = { newGoal ->
                 onSetDailyGoal?.invoke(newGoal)

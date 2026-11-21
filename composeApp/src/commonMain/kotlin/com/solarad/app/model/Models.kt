@@ -10,14 +10,11 @@ enum class TimeRange(
     TODAY("td", "Today", "Live real-time earnings"),
     YESTERDAY("yd", "Yesterday", "Finalized daily earnings"),
     LAST_7_DAYS("7d", "Last 7 Days", "Past 7 days performance"),
+    THIS_MONTH("mtd", "This Month", "Month-to-date earnings"),
     DAYS_30("30d", "Last 30 Days", "Past 30 days performance"),
     CUSTOM("custom", "Custom Range", "Custom selected date range");
 
     val shortLabel: String get() = label
-
-    companion object {
-        val THIS_MONTH get() = DAYS_30
-    }
 }
 
 enum class AnalyticsRange(val label: String) {
@@ -79,6 +76,8 @@ data class AccountSummary(
     val deltaAmount: Double,
     val deltaPercentage: Double,
     val dailyGoal: Double,
+    val periodGoal: Double = dailyGoal,
+    val periodDays: Int = 1,
     val dailyGoalProgress: Float,
     val ecpm: Double,
     val impressions: Int,
@@ -159,7 +158,7 @@ enum class ThemeMode(val label: String) {
 
     companion object {
         fun fromString(value: String?): ThemeMode =
-            entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: SYSTEM
+            entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: LIGHT
     }
 }
 

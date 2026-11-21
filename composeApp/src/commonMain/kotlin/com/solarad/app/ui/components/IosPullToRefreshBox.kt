@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.layout.layout
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -49,7 +51,7 @@ import kotlin.math.sin
 @Composable
 fun IosActivityIndicator(
     isRefreshing: Boolean,
-    pullFraction: Float,
+    pullFraction: () -> Float,
     modifier: Modifier = Modifier,
     size: Dp = 24.dp,
     tint: Color = EspressoSlate
@@ -61,15 +63,21 @@ fun IosActivityIndicator(
         floatArrayOf(1.00f, 0.88f, 0.74f, 0.60f, 0.48f, 0.38f, 0.28f, 0.20f, 0.15f, 0.12f, 0.10f, 0.08f)
     }
 
-    val infiniteTransition = rememberInfiniteTransition()
-    val activePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 960, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
+    // Only run the frame clock while actually refreshing; idle spinner costs zero frames
+    val activePhaseState: androidx.compose.runtime.State<Float> = if (isRefreshing) {
+        rememberInfiniteTransition(label = "spinner").animateFloat(
+            initialValue = 0f,
+            targetValue = 12f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 960, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "spinnerPhase"
         )
-    )
+    } else {
+        remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    }
+    val activePhase by activePhaseState
 
     Canvas(modifier = modifier.size(size)) {
         val center = Offset(size.toPx() / 2f, size.toPx() / 2f)
@@ -78,7 +86,7 @@ fun IosActivityIndicator(
         val strokeWidth = size.toPx() * 0.095f
 
         val currentStep = if (isRefreshing) activePhase.toInt() % totalSpokes else 0
-        val litSpokeCount = if (isRefreshing) totalSpokes else (pullFraction * totalSpokes).toInt().coerceIn(0, totalSpokes)
+        val litSpokeCount = if (isRefreshing) totalSpokes else (pullFraction() * totalSpokes).toInt().coerceIn(0, totalSpokes)
 
         for (i in 0 until totalSpokes) {
             // Spoke angle in radians, starting at 12 o'clock (-PI / 2)
@@ -224,20 +232,27 @@ fun IosPullToRefreshBox(
     Box(
         modifier = modifier.nestedScroll(nestedScrollConnection)
     ) {
-        val currentOffset = pullOffset.value
-        val pullFraction = (currentOffset / thresholdPx).coerceIn(0f, 1f)
+        // Offset is only read in layout/draw phases (not composition), so dragging
+        // doesn't recompose the screen content every frame.
+        val indicatorVisible by remember { derivedStateOf { pullOffset.value > 2f } }
 
         // Indicator revealed above content
-        if (currentOffset > 2f || isRefreshing) {
+        if (indicatorVisible || isRefreshing) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(with(density) { currentOffset.toDp() }),
+                    .layout { measurable, constraints ->
+                        val h = pullOffset.value.roundToInt().coerceAtLeast(0)
+                        val placeable = measurable.measure(
+                            constraints.copy(minHeight = h, maxHeight = h)
+                        )
+                        layout(placeable.width, h) { placeable.place(0, 0) }
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 IosActivityIndicator(
                     isRefreshing = isRefreshing,
-                    pullFraction = pullFraction,
+                    pullFraction = { (pullOffset.value / thresholdPx).coerceIn(0f, 1f) },
                     size = 24.dp,
                     tint = indicatorTint
                 )
@@ -248,7 +263,7 @@ fun IosPullToRefreshBox(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .offset { IntOffset(0, currentOffset.roundToInt()) }
+                .offset { IntOffset(0, pullOffset.value.roundToInt()) }
         ) {
             content()
         }

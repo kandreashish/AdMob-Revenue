@@ -8,6 +8,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -17,6 +18,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.solarad.app.model.ThemeMode
+import com.solarad.app.resources.Res
+import com.solarad.app.resources.google_sans_bold
+import com.solarad.app.resources.google_sans_medium
+import com.solarad.app.resources.google_sans_regular
+import com.solarad.app.resources.google_sans_semibold
+import org.jetbrains.compose.resources.Font
 
 data class SolarColors(
     val isDark: Boolean,
@@ -106,7 +113,7 @@ val DarkSolarColors = SolarColors(
     onErrorContainer = DarkCoralCrimson,
     bottomDockBackground = DarkCharcoalSurfaceElevated,
     pillSelectedBg = SolarAmber,
-    pillSelectedText = EspressoSlate,
+    pillSelectedText = PureWhite,
     pillUnselectedBg = DarkCharcoalSurfaceVariant,
     pillUnselectedText = DarkTextPrimary
 )
@@ -140,7 +147,7 @@ private val SolarAdColorScheme = lightColorScheme(
 
 private val SolarAdDarkColorScheme = darkColorScheme(
     primary = SolarAmber,
-    onPrimary = EspressoSlate,
+    onPrimary = PureWhite,
     primaryContainer = DarkAmberContainer,
     onPrimaryContainer = DarkOnAmberContainer,
     secondary = DarkOceanAzure,
@@ -165,72 +172,90 @@ val SolarShapes = Shapes(
     extraLarge = RoundedCornerShape(32.dp)
 )
 
-val SolarTypography = Typography(
+/** AdMob console font: Google Sans (bundled in composeResources/font). */
+@Composable
+fun googleSansFamily(): FontFamily {
+    val regular = Font(Res.font.google_sans_regular, FontWeight.Normal)
+    val medium = Font(Res.font.google_sans_medium, FontWeight.Medium)
+    val semibold = Font(Res.font.google_sans_semibold, FontWeight.SemiBold)
+    val bold = Font(Res.font.google_sans_bold, FontWeight.Bold)
+    val extraBold = Font(Res.font.google_sans_bold, FontWeight.ExtraBold)
+    // Same FontFamily instance across recompositions -> text styles stay equal, no needless re-layout
+    return remember(regular, medium, semibold, bold, extraBold) {
+        FontFamily(regular, medium, semibold, bold, extraBold)
+    }
+}
+
+@Composable
+fun solarTypography(family: FontFamily = googleSansFamily()): Typography =
+    remember(family) { buildSolarTypography(family) }
+
+private fun buildSolarTypography(family: FontFamily): Typography = Typography(
     displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.ExtraBold,
         fontSize = 42.sp,
         lineHeight = 48.sp,
         letterSpacing = (-0.03).sp
     ),
     displayMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
         lineHeight = 38.sp,
         letterSpacing = (-0.02).sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         lineHeight = 30.sp,
         letterSpacing = (-0.015).sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
         lineHeight = 26.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.SemiBold,
         fontSize = 18.sp,
         lineHeight = 24.sp
     ),
     titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.Medium,
         fontSize = 15.sp,
         lineHeight = 22.sp
     ),
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp
     ),
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp
     ),
     bodySmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp
     ),
     labelLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp,
         lineHeight = 18.sp
     ),
     labelMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = family,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 14.sp
@@ -242,7 +267,7 @@ expect fun PlatformSystemBarsEffect(darkTheme: Boolean)
 
 @Composable
 fun SolarAdTheme(
-    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    themeMode: ThemeMode = ThemeMode.LIGHT,
     darkTheme: Boolean = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
@@ -258,7 +283,7 @@ fun SolarAdTheme(
     CompositionLocalProvider(LocalSolarColors provides solarColors) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = SolarTypography,
+            typography = solarTypography(),
             shapes = SolarShapes,
             content = content
         )

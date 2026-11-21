@@ -252,10 +252,12 @@ private fun mapTimeRangeToHorizon(timeRange: TimeRange?): DetailTimeHorizon {
         TimeRange.TODAY -> DetailTimeHorizon.TODAY
         TimeRange.YESTERDAY -> DetailTimeHorizon.YESTERDAY
         TimeRange.LAST_7_DAYS -> DetailTimeHorizon.DAYS_7
-        TimeRange.DAYS_30 -> DetailTimeHorizon.DAYS_30
+        TimeRange.DAYS_30, TimeRange.THIS_MONTH -> DetailTimeHorizon.DAYS_30
         else -> DetailTimeHorizon.TODAY
     }
 }
+
+private const val MAX_EXPANDED_COUNTRIES = 50
 
 @Composable
 fun AppDetailScreen(
@@ -271,11 +273,11 @@ fun AppDetailScreen(
     var showAllCountries by remember { mutableStateOf(false) }
 
     val isIos = app.platform.equals("iOS", ignoreCase = true)
-    val now = remember { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date }
+    val now by rememberCurrentDate()
     val todayStr = remember(now) { AdMobApiClient.formatDateKey(now) }
     val yesterdayStr = remember(now) { AdMobApiClient.formatDateKey(now.minus(1, DateTimeUnit.DAY)) }
-    val days7List = remember(now) { (6 downTo 0).map { AdMobApiClient.formatDateKey(now.minus(it, DateTimeUnit.DAY)) } }
-    val days30List = remember(now) { (29 downTo 0).map { AdMobApiClient.formatDateKey(now.minus(it, DateTimeUnit.DAY)) } }
+    val days7List = remember(now) { (6 downTo 0).mapTo(HashSet()) { AdMobApiClient.formatDateKey(now.minus(it, DateTimeUnit.DAY)) } }
+    val days30List = remember(now) { (29 downTo 0).mapTo(HashSet()) { AdMobApiClient.formatDateKey(now.minus(it, DateTimeUnit.DAY)) } }
 
     // Filter report rows specifically for this app
     val appAllRows = remember(reportRows, app.id, app.name) {
@@ -286,7 +288,7 @@ fun AppDetailScreen(
     }
 
     // Filter rows based on active horizon
-    val activeRows = remember(appAllRows, selectedHorizon, todayStr, yesterdayStr) {
+    val activeRows = remember(appAllRows, selectedHorizon, todayStr, yesterdayStr, days7List, days30List) {
         when (selectedHorizon) {
             DetailTimeHorizon.TODAY -> appAllRows.filter { it.date == todayStr }
             DetailTimeHorizon.YESTERDAY -> appAllRows.filter { it.date == yesterdayStr }
@@ -474,16 +476,15 @@ fun AppDetailScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
+                    val pc = SolarTheme.colors.primaryContainer
+                    val activeBgGradient = remember(pc) { Brush.horizontalGradient(colors = listOf(pc, pc)) }
                     DetailTimeHorizon.entries.forEach { horizon ->
                         val isSelected = horizon == selectedHorizon
                         val elevation by animateDpAsState(
                             targetValue = if (isSelected) 2.dp else 0.dp,
                             animationSpec = spring(stiffness = 500f)
                         )
-                        val activeBgGradient = Brush.horizontalGradient(
-                            colors = listOf(SolarAmber, Color(0xFFD97706))
-                        )
-                        val activeContentColor = if (SolarTheme.colors.isDark) EspressoSlate else PureWhite
+                        val activeContentColor = if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.solarad.app.theme.AdMobSelectedText
 
                         Surface(
                             modifier = Modifier
@@ -492,8 +493,8 @@ fun AppDetailScreen(
                                 .shadow(
                                     elevation = elevation,
                                     shape = RoundedCornerShape(11.dp),
-                                    ambientColor = if (isSelected) SolarAmber.copy(alpha = if (SolarTheme.colors.isDark) 0.25f else 0.35f) else Color.Transparent,
-                                    spotColor = if (isSelected) (if (SolarTheme.colors.isDark) SolarAmber.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.15f)) else Color.Transparent
+                                    ambientColor = Color.Transparent,
+                                    spotColor = Color.Transparent
                                 )
                                 .clip(RoundedCornerShape(11.dp))
                                 .clickable(
@@ -600,7 +601,7 @@ fun AppDetailScreen(
                     .shadow(
                         elevation = 3.dp,
                         shape = RoundedCornerShape(22.dp),
-                        ambientColor = SolarAmber.copy(alpha = 0.2f),
+                        ambientColor = Color.Black.copy(alpha = 0.06f),
                         spotColor = Color.Black.copy(alpha = 0.05f)
                     )
                     .border(1.dp, SolarAmber.copy(alpha = 0.4f), RoundedCornerShape(22.dp)),
@@ -871,7 +872,7 @@ fun AppDetailScreen(
 
                     if (countryList.size > 5) {
                         Text(
-                            text = if (showAllCountries) "Show Less" else "View All (${countryList.size})",
+                            text = if (showAllCountries) "Show Less" else "View Top ${minOf(countryList.size, MAX_EXPANDED_COUNTRIES)}",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = OceanAzure,
@@ -901,7 +902,10 @@ fun AppDetailScreen(
                         )
                     }
                 } else {
-                    val displayedCountries = if (showAllCountries) countryList else countryList.take(5)
+                    val displayedCountries = remember(countryList, showAllCountries) {
+                        // cap expanded list: Column composes every row eagerly
+                        if (showAllCountries) countryList.take(MAX_EXPANDED_COUNTRIES) else countryList.take(5)
+                    }
 
                     Surface(
                         modifier = Modifier.fillMaxWidth(),

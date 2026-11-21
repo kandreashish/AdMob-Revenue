@@ -28,34 +28,66 @@ import com.solarad.app.theme.EspressoSlate
 import com.solarad.app.theme.SolarAmber
 import com.solarad.app.theme.SolarAmberLight
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.withLock
 import io.ktor.client.request.get
 import io.ktor.client.statement.readRawBytes
 import io.ktor.http.isSuccess
 
 object AvatarImageLoader {
-    private val cache = mutableMapOf<String, ImageBitmap>()
+    private const val MAX_ENTRIES = 48
+    // Access-ordered LRU so icons/avatars can't grow memory unbounded
+    private val cache = LinkedHashMap<String, ImageBitmap>()
+    private val inFlight = mutableMapOf<String, kotlinx.coroutines.Deferred<ImageBitmap?>>()
+    private val lock = kotlinx.coroutines.sync.Mutex()
     private val client = HttpClient()
+    // One long-lived scope for all image fetches (no per-request unstructured scopes)
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+    // Read-only snapshot for lock-free, thread-safe peeks from the UI thread
+    @kotlin.concurrent.Volatile private var snapshot: Map<String, ImageBitmap> = emptyMap()
+
+    /** Synchronous cache lookup so composables can render the image on the very first frame. */
+    fun peek(url: String?): ImageBitmap? {
+        val key = url?.trim().orEmpty()
+        if (key.isBlank()) return null
+        return snapshot[key]
+    }
+
+    private fun put(key: String, bmp: ImageBitmap) {
+        cache.remove(key)
+        cache[key] = bmp
+        while (cache.size > MAX_ENTRIES) cache.remove(cache.keys.first())
+        snapshot = HashMap(cache)
+    }
 
     suspend fun load(url: String): ImageBitmap? {
         val cleanUrl = url.trim()
         if (cleanUrl.isBlank()) return null
-        cache[cleanUrl]?.let { return it }
+        snapshot[cleanUrl]?.let { return it }
 
-        return try {
-            val response = client.get(cleanUrl)
-            if (response.status.isSuccess()) {
-                val bytes = response.readRawBytes()
-                val bitmap = decodeByteArrayToBitmap(bytes)
-                if (bitmap != null) {
-                    cache[cleanUrl] = bitmap
+        // De-duplicate concurrent requests for the same URL (e.g. same icon in several lists)
+        val deferred = lock.withLock {
+            cache[cleanUrl]?.let { return it }
+            inFlight.getOrPut(cleanUrl) {
+                scope.async {
+                    try {
+                        val response = client.get(cleanUrl)
+                        if (response.status.isSuccess()) {
+                            // Decode off the main thread
+                            decodeByteArrayToBitmap(response.readRawBytes())
+                        } else null
+                    } catch (_: Throwable) {
+                        null
+                    }
                 }
-                bitmap
-            } else {
-                null
             }
-        } catch (_: Throwable) {
-            null
         }
+        val bitmap = try { deferred.await() } catch (_: Throwable) { null }
+        lock.withLock {
+            inFlight.remove(cleanUrl)
+            if (bitmap != null) put(cleanUrl, bitmap)
+        }
+        return bitmap
     }
 }
 
@@ -70,11 +102,11 @@ fun UserProfileAvatar(
     modifier: Modifier = Modifier,
     iconSize: Dp = 20.dp
 ) {
-    var imageBitmap by remember(avatarUrl) { mutableStateOf<ImageBitmap?>(null) }
+    var imageBitmap by remember(avatarUrl) { mutableStateOf(AvatarImageLoader.peek(avatarUrl)) }
 
     LaunchedEffect(avatarUrl) {
         if (!avatarUrl.isNullOrBlank()) {
-            imageBitmap = AvatarImageLoader.load(avatarUrl)
+            if (imageBitmap == null) imageBitmap = AvatarImageLoader.load(avatarUrl)
         } else {
             imageBitmap = null
         }

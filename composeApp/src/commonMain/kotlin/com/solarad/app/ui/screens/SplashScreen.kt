@@ -34,6 +34,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -51,22 +52,21 @@ private val AdMobRedStart = Color(0xFFEA4335)
 private val AdMobRedMid = Color(0xFFD93025)
 private val AdMobRedDark = Color(0xFF670503)
 
-private val GoldLight = Color(0xFFFFF3B0)
-private val GoldMid = Color(0xFFF59E0B)
-private val GoldDark = Color(0xFFB45309)
-private val GoldText = Color(0xFF78350F)
+private val GoldLight = Color(0xFFFEF7E0)
+private val GoldMid = Color(0xFF1A73E8)
+private val GoldDark = Color(0xFF185ABC)
+private val GoldText = Color(0xFF174EA6)
+
+private val SplashGlowBrush = Brush.radialGradient(
+    colors = listOf(Color.White.copy(alpha = 0.25f), Color.Transparent)
+)
 
 @Composable
 fun SplashScreen(
     modifier: Modifier = Modifier
 ) {
-    val isDark = SolarTheme.colors.isDark
-    val bgColor = if (isDark) DarkCharcoalBg else Color(0xFFFAFAFA)
-    val textPrimary = if (isDark) PureWhite else Color(0xFF1F1F1F)
-    val textSecondary = if (isDark) Color(0xFFA8A29E) else Color(0xFF6B7280)
-
     val infiniteTransition = rememberInfiniteTransition(label = "splashPulse")
-    val pulseScale by infiniteTransition.animateFloat(
+    val pulseScale = infiniteTransition.animateFloat(
         initialValue = 0.98f,
         targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
@@ -75,7 +75,7 @@ fun SplashScreen(
         ),
         label = "pulseScale"
     )
-    val glowAlpha by infiniteTransition.animateFloat(
+    val glowAlpha = infiniteTransition.animateFloat(
         initialValue = 0.25f,
         targetValue = 0.6f,
         animationSpec = infiniteRepeatable(
@@ -85,92 +85,99 @@ fun SplashScreen(
         label = "glowAlpha"
     )
 
-    Surface(
-        modifier = modifier.fillMaxSize(),
-        color = bgColor
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        AdMobRedStart,
+                        AdMobRedMid,
+                        AdMobRedDark
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 24.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(horizontal = 24.dp)
+            // Outer Ambient Glow + App Icon
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(160.dp)
             ) {
-                // Outer Ambient Glow + App Icon
+                // Soft Radial Glow
                 Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(160.dp)
-                ) {
-                    // Soft Radial Glow
-                    Box(
-                        modifier = Modifier
-                            .size(150.dp)
-                            .scale(pulseScale)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        AdMobRedMid.copy(alpha = glowAlpha),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
-
-                    // AdDash Icon
-                    AdCashIconBadge(
-                        modifier = Modifier
-                            .size(112.dp)
-                            .scale(pulseScale)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Brand Name
-                Text(
-                    text = "AdDash",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = textPrimary,
-                    letterSpacing = (-0.5).sp,
-                    textAlign = TextAlign.Center
+                    modifier = Modifier
+                        .size(150.dp)
+                        // Animated values read only in the draw phase: no per-frame recomposition,
+                        // constant brush instead of a new gradient every frame
+                        .graphicsLayer {
+                            scaleX = pulseScale.value
+                            scaleY = pulseScale.value
+                            alpha = glowAlpha.value
+                        }
+                        .background(SplashGlowBrush)
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Tagline
-                Text(
-                    text = "Real-Time AdMob Revenue",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = textSecondary,
-                    textAlign = TextAlign.Center
+                // AdDash Icon
+                AdCashIconBadge(
+                    modifier = Modifier
+                        .size(112.dp)
+                        .graphicsLayer {
+                            scaleX = pulseScale.value
+                            scaleY = pulseScale.value
+                        }
                 )
             }
 
-            // Bottom Security Badge
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 36.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Shield,
-                    contentDescription = null,
-                    tint = SolarAmber,
-                    modifier = Modifier.size(14.dp)
-                )
-                Text(
-                    text = " Secured with Google AdMob API",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = textSecondary
-                )
-            }
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Brand Name
+            Text(
+                text = "AdDash",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = PureWhite,
+                letterSpacing = (-0.5).sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Tagline
+            Text(
+                text = "Real-Time AdMob Revenue",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFFFAD2CF),
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // Bottom Security Badge
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 36.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Shield,
+                contentDescription = null,
+                tint = GoldLight,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = " Secured with Google AdMob API",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFFAD2CF)
+            )
         }
     }
 }
@@ -245,7 +252,7 @@ fun AdCashIconBadge(modifier: Modifier = Modifier) {
             drawPath(
                 path = ribbonPath1,
                 brush = Brush.linearGradient(
-                    colors = listOf(Color.White, Color(0xFFFFEBEE))
+                    colors = listOf(Color.White, Color(0xFFFCE8E6))
                 )
             )
 
@@ -260,7 +267,7 @@ fun AdCashIconBadge(modifier: Modifier = Modifier) {
             drawPath(
                 path = ribbonPath2,
                 brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFFFF5252), Color(0xFFD32F2F))
+                    colors = listOf(Color(0xFFFF5252), Color(0xFFD93025))
                 )
             )
 

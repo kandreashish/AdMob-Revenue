@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.solarad.app.ui.components.uniqueKeys
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,7 +93,7 @@ fun AppsScreen(
     var newAppName by remember { mutableStateOf("") }
     var newAppPlatform by remember { mutableStateOf("Android") }
 
-    val filteredApps = apps.filter { app ->
+    val filteredApps = remember(apps, searchQuery, selectedPlatform) { apps.filter { app ->
         val matchesPlatform = when (selectedPlatform) {
             PlatformFilter.ALL -> true
             PlatformFilter.IOS -> app.platform.equals("iOS", ignoreCase = true)
@@ -99,7 +101,7 @@ fun AppsScreen(
         }
         val matchesQuery = searchQuery.isBlank() || app.name.contains(searchQuery, ignoreCase = true)
         matchesPlatform && matchesQuery
-    }
+    } }
 
     LazyColumn(
         modifier = Modifier
@@ -208,7 +210,8 @@ fun AppsScreen(
             }
         } else {
             // Detailed App Cards
-            items(filteredApps) { app ->
+            val appKeys = uniqueKeys(filteredApps) { it.id }
+            itemsIndexed(filteredApps, key = { i, _ -> appKeys[i] }, contentType = { _, _ -> "app" }) { _, app ->
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -468,7 +471,7 @@ fun AppsScreen(
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isSelected) {
-                                        if (SolarTheme.colors.isDark) EspressoSlate else PureWhite
+                                        PureWhite
                                     } else {
                                         SolarTheme.colors.textPrimary
                                     },

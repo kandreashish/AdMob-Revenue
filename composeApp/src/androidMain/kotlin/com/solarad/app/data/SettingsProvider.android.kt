@@ -6,6 +6,8 @@ import com.russhwolf.settings.SharedPreferencesSettings
 
 private var appContext: Context? = null
 
+internal fun androidAppContext(): Context? = appContext
+
 fun initAndroidSettings(context: Context) {
     appContext = context.applicationContext
 }

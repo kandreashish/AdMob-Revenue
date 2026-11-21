@@ -12,7 +12,11 @@ import com.solarad.app.model.UserSession
 import com.solarad.app.model.WalletSummary
 import com.solarad.app.model.maskPublisherId
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.withLock
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -28,6 +32,7 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
@@ -66,7 +71,9 @@ data class AdMobReportRow(
     val country: String,
     val earnings: Double,
     val impressions: Int,
-    val clicks: Int
+    val clicks: Int,
+    val adRequests: Long = 0L,
+    val matchedRequests: Long = 0L
 )
 
 data class RealAdMobPayload(
@@ -78,25 +85,18 @@ data class RealAdMobPayload(
     val apps: List<AppMonetization>,
     val analytics: AnalyticsSummary,
     val wallet: WalletSummary,
+    val reportingTimeZone: String = "",
     val statusMessage: String = ""
 )
 
+// In production release builds, sensitive API payloads and tokens are disabled by default
+var isDebugLoggingEnabled: Boolean = false
+
 private fun logAdMob(endpoint: String, message: String) {
-    val tag = "[AdMobAPI]"
-    if (message.length <= 3000) {
-        println("$tag $endpoint: $message")
-    } else {
-        println("$tag $endpoint: (Total length: ${message.length} chars, splitting into logcat chunks)")
-        var index = 0
-        var part = 1
-        val totalParts = (message.length + 2999) / 3000
-        while (index < message.length) {
-            val end = (index + 3000).coerceAtMost(message.length)
-            println("$tag $endpoint [Part $part/$totalParts]: ${message.substring(index, end)}")
-            index = end
-            part++
-        }
-    }
+    if (!isDebugLoggingEnabled) return
+    // Never dump multi-MB report bodies (slow, and leaks data into logcat). Log a capped preview + size.
+    val preview = if (message.length <= 500) message else message.take(500) + "… (${message.length} chars)"
+    println("[AdMobAPI] $endpoint: $preview")
 }
 
 class AdMobApiClient(
@@ -104,8 +104,37 @@ class AdMobApiClient(
         install(ContentNegotiation) {
             json(jsonParser)
         }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 45_000
+            connectTimeoutMillis = 10_000
+            socketTimeoutMillis = 30_000
+        }
     }
 ) {
+    // ---- In-memory caches (cleared on logout via clearCaches()) ----
+    private class Timed<T>(val value: T, val atMs: Long)
+    private val cacheLock = kotlinx.coroutines.sync.Mutex()
+    private var userInfoCache: Timed<GoogleUserInfo>? = null
+    private var accountsCache: Timed<List<PublisherAccount>>? = null
+    private var appsCache: Timed<List<AppMonetization>>? = null
+    private var lifetimeCache: Timed<Double>? = null
+    private var reportCache: ReportCache? = null
+
+    /** Last full report, used to merge short incremental windows on auto-refresh. */
+    private class ReportCache(
+        val accountName: String,
+        val source: String, // "mediation" | "network"
+        val rows: List<AdMobReportRow>,
+        val fullFetchedAtMs: Long,
+        val fullFetchedForDay: String
+    )
+
+    private fun nowMs() = Clock.System.now().toEpochMilliseconds()
+    private fun <T> Timed<T>?.fresh(ttlMs: Long): T? = this?.takeIf { nowMs() - it.atMs < ttlMs }?.value
+
+    suspend fun clearCaches() = cacheLock.withLock {
+        userInfoCache = null; accountsCache = null; appsCache = null; lifetimeCache = null; reportCache = null
+    }
 
     /**
      * Fetches user identity (name, email) from Google OAuth2 userinfo endpoint
@@ -202,7 +231,7 @@ class AdMobApiClient(
               "endDate": { "year": $endYear, "month": $endMonth, "day": $endDay }
             },
             "dimensions": ["DATE", "APP", "FORMAT", "COUNTRY"],
-            "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS", "CLICKS", "IMPRESSION_CTR", "IMPRESSION_RPM", "MATCH_RATE"]
+            "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS", "CLICKS", "AD_REQUESTS", "MATCHED_REQUESTS"]
           }
         }
         """.trimIndent()
@@ -242,7 +271,7 @@ class AdMobApiClient(
               "endDate": { "year": $endYear, "month": $endMonth, "day": $endDay }
             },
             "dimensions": ["DATE", "APP", "FORMAT", "COUNTRY"],
-            "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS", "CLICKS"]
+            "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS", "CLICKS", "AD_REQUESTS", "MATCHED_REQUESTS"]
           }
         }
         """.trimIndent()
@@ -329,22 +358,33 @@ class AdMobApiClient(
         fallbackAvatarUrl: String? = null,
         customDailyGoal: Double? = null
     ): Result<RealAdMobPayload> = runCatching {
-        // 1. Authenticate user info (graceful fallback if OAuth token scope is restricted to AdMob)
-        val userInfo = fetchGoogleUserInfo(accessToken).getOrElse {
-            GoogleUserInfo(
-                name = fallbackName.ifBlank { "AdMob Publisher" },
-                email = fallbackEmail.ifBlank { "publisher@gmail.com" },
-                picture = fallbackAvatarUrl
-            )
+        // 1+2. User info and accounts are independent -> fetch in parallel, cached for 6h.
+        val (userInfo, accounts) = coroutineScope {
+            val userInfoDeferred = async {
+                cacheLock.withLock { userInfoCache.fresh(META_TTL_MS) }
+                    ?: fetchGoogleUserInfo(accessToken).getOrNull()?.also { ui ->
+                        cacheLock.withLock { userInfoCache = Timed(ui, nowMs()) }
+                    }
+                    ?: GoogleUserInfo(
+                        name = fallbackName.ifBlank { "AdMob Publisher" },
+                        email = fallbackEmail.ifBlank { "publisher@gmail.com" },
+                        picture = fallbackAvatarUrl
+                    )
+            }
+            val accountsDeferred = async {
+                cacheLock.withLock { accountsCache.fresh(META_TTL_MS) }?.let { Result.success(it) }
+                    ?: fetchPublisherAccounts(accessToken).onSuccess { list ->
+                        if (list.isNotEmpty()) cacheLock.withLock { accountsCache = Timed(list, nowMs()) }
+                    }
+            }
+            val accountsResult = accountsDeferred.await()
+            if (accountsResult.isFailure) {
+                userInfoDeferred.cancel()
+                val err = accountsResult.exceptionOrNull()?.message ?: "Unknown error"
+                throw Exception("AdMob Publisher Accounts lookup failed: $err")
+            }
+            userInfoDeferred.await() to accountsResult.getOrThrow()
         }
-
-        // 2. Discover linked publisher accounts
-        val accountsResult = fetchPublisherAccounts(accessToken)
-        if (accountsResult.isFailure) {
-            val err = accountsResult.exceptionOrNull()?.message ?: "Unknown error"
-            throw Exception("AdMob Publisher Accounts lookup failed: $err")
-        }
-        val accounts = accountsResult.getOrThrow()
         if (accounts.isEmpty()) {
             throw Exception("No AdMob publisher account was found for ${userInfo.email}. Please verify that your account is registered at admob.google.com and the AdMob API is enabled in your Google Cloud project.")
         }
@@ -352,9 +392,6 @@ class AdMobApiClient(
 
         val currencyCode = primaryAccount.currencyCode.ifBlank { "USD" }
         val currencySymbol = resolveCurrencySymbol(currencyCode)
-
-        // 3. Fetch registered apps
-        val registeredApps = fetchPublisherApps(accessToken, primaryAccount.name).getOrDefault(emptyList())
 
         // 4. Timezone-aware date calculations
         // Dates in AdMob reports are generated in the account's reportingTimeZone.
@@ -366,40 +403,23 @@ class AdMobApiClient(
         }
         val now = Clock.System.now()
         val today = now.toLocalDateTime(accountTz).date
-        val ninetyDaysAgo = today.minus(90, DateTimeUnit.DAY)
 
-        // 5. Fetch daily report rows: Try Mediation Report first (contains all ad sources: AdMob Network + Bidding + Mediation partners)
-        val reportRows = mutableListOf<AdMobReportRow>()
-        val mediationResult = fetchMediationReportRaw(
-            accessToken = accessToken,
-            accountName = primaryAccount.name,
-            startYear = ninetyDaysAgo.year, startMonth = ninetyDaysAgo.month.number, startDay = ninetyDaysAgo.day,
-            endYear = today.year, endMonth = today.month.number, endDay = today.day
-        )
-        if (mediationResult.isSuccess) {
-            val medText = mediationResult.getOrThrow()
-            parseReportRows(medText, reportRows)
-            logAdMob("ReportSelection", "Using Mediation Report: parsed ${reportRows.size} rows")
-        }
-
-        // Fallback to Network Report if mediation returned no rows or failed
-        if (reportRows.isEmpty()) {
-            val rawReportResult = fetchNetworkReportRaw(
-                accessToken = accessToken,
-                accountName = primaryAccount.name,
-                startYear = ninetyDaysAgo.year, startMonth = ninetyDaysAgo.month.number, startDay = ninetyDaysAgo.day,
-                endYear = today.year, endMonth = today.month.number, endDay = today.day
-            )
-
-            if (rawReportResult.isFailure) {
-                val reportErr = rawReportResult.exceptionOrNull()?.message ?: "AdMob network report failed"
-                logAdMob("NetworkReport:Error", reportErr)
-                throw Exception("AdMob Report Error: $reportErr")
+        // 3 + 5 + lifetime: apps, report rows and lifetime earnings only depend on the account -> parallel.
+        val (registeredApps, reportRows, lifetimeEarnings) = coroutineScope {
+            val appsDeferred = async {
+                cacheLock.withLock { appsCache.fresh(META_TTL_MS) }
+                    ?: fetchPublisherApps(accessToken, primaryAccount.name).getOrDefault(emptyList()).also { list ->
+                        if (list.isNotEmpty()) cacheLock.withLock { appsCache = Timed(list, nowMs()) }
+                    }
             }
-
-            val jsonText = rawReportResult.getOrThrow()
-            parseReportRows(jsonText, reportRows)
-            logAdMob("ReportSelection", "Using Network Report: parsed ${reportRows.size} rows")
+            val lifetimeDeferred = async {
+                cacheLock.withLock { lifetimeCache.fresh(LIFETIME_TTL_MS) }
+                    ?: fetchLifetimeEarnings(accessToken, primaryAccount.name, today).getOrNull()?.also { v ->
+                        cacheLock.withLock { lifetimeCache = Timed(v, nowMs()) }
+                    }
+            }
+            val rowsDeferred = async { fetchReportRowsSmart(accessToken, primaryAccount.name, today) }
+            Triple(appsDeferred.await(), rowsDeferred.await(), lifetimeDeferred.await())
         }
 
         logAdMob("FetchRealData:Summary", "Parsed ${reportRows.size} daily report rows for publisher ${primaryAccount.publisherId}")
@@ -426,7 +446,6 @@ class AdMobApiClient(
         )
         val apps = computeAppsMonetization(reportRows, registeredApps, today)
         val analytics = computeAnalytics(reportRows, AnalyticsRange.DAYS_7, today)
-        val lifetimeEarnings = fetchLifetimeEarnings(accessToken, primaryAccount.name, today).getOrNull()
         val wallet = computeWallet(reportRows, lifetimeEarnings)
 
         RealAdMobPayload(
@@ -438,6 +457,7 @@ class AdMobApiClient(
             apps = apps,
             analytics = analytics,
             wallet = wallet,
+            reportingTimeZone = accountTz.id,
             statusMessage = run {
                 val maskedId = maskPublisherId(primaryAccount.publisherId)
                 if (maskedId.isNotBlank()) "Connected to AdMob Publisher $maskedId" else "Connected to AdMob"
@@ -445,7 +465,97 @@ class AdMobApiClient(
         )
     }
 
+    /**
+     * Full 90-day report at most once per [FULL_REPORT_TTL_MS] (or when the day rolls over / cache is empty).
+     * In between, only the last [INCREMENTAL_DAYS] days are re-fetched and merged in: rows are keyed by
+     * (date, app, format, country), so replacing every row whose date falls in the window is exact.
+     */
+    private suspend fun fetchReportRowsSmart(accessToken: String, accountName: String, today: LocalDate): List<AdMobReportRow> {
+        val todayKey = formatDateKey(today)
+        val oldestKey = formatDateKey(today.minus(90, DateTimeUnit.DAY))
+        val cache = cacheLock.withLock { reportCache }
+        val canIncrement = cache != null &&
+            cache.accountName == accountName &&
+            cache.rows.isNotEmpty() &&
+            cache.fullFetchedForDay == todayKey &&
+            nowMs() - cache.fullFetchedAtMs < FULL_REPORT_TTL_MS
+
+        if (canIncrement) {
+            val windowStart = today.minus(INCREMENTAL_DAYS - 1, DateTimeUnit.DAY)
+            val windowStartKey = formatDateKey(windowStart)
+            val raw = if (cache!!.source == "mediation") {
+                fetchMediationReportRaw(accessToken, accountName,
+                    windowStart.year, windowStart.month.number, windowStart.day,
+                    today.year, today.month.number, today.day)
+            } else {
+                fetchNetworkReportRaw(accessToken, accountName,
+                    windowStart.year, windowStart.month.number, windowStart.day,
+                    today.year, today.month.number, today.day)
+            }
+            val fresh = raw.getOrNull()?.let { text -> mutableListOf<AdMobReportRow>().also { parseReportRows(text, it) } }
+            if (fresh != null) {
+                val merged = ArrayList<AdMobReportRow>(cache.rows.size + fresh.size)
+                cache.rows.forEach { if (it.date < windowStartKey && it.date >= oldestKey) merged.add(it) }
+                merged.addAll(fresh)
+                cacheLock.withLock {
+                    reportCache = ReportCache(accountName, cache.source, merged, cache.fullFetchedAtMs, cache.fullFetchedForDay)
+                }
+                logAdMob("ReportSelection", "Incremental ${cache.source}: ${fresh.size} fresh rows, ${merged.size} total")
+                return merged
+            }
+            // Incremental call failed -> fall through to a full fetch
+        }
+
+        val ninetyDaysAgo = today.minus(90, DateTimeUnit.DAY)
+        val reportRows = mutableListOf<AdMobReportRow>()
+        var source = "mediation"
+        val mediationResult = fetchMediationReportRaw(
+            accessToken = accessToken,
+            accountName = accountName,
+            startYear = ninetyDaysAgo.year, startMonth = ninetyDaysAgo.month.number, startDay = ninetyDaysAgo.day,
+            endYear = today.year, endMonth = today.month.number, endDay = today.day
+        )
+        if (mediationResult.isSuccess) {
+            parseReportRows(mediationResult.getOrThrow(), reportRows)
+            logAdMob("ReportSelection", "Using Mediation Report: parsed ${reportRows.size} rows")
+        }
+
+        // Fallback to Network Report if mediation returned no rows or failed
+        if (reportRows.isEmpty()) {
+            source = "network"
+            val rawReportResult = fetchNetworkReportRaw(
+                accessToken = accessToken,
+                accountName = accountName,
+                startYear = ninetyDaysAgo.year, startMonth = ninetyDaysAgo.month.number, startDay = ninetyDaysAgo.day,
+                endYear = today.year, endMonth = today.month.number, endDay = today.day
+            )
+            if (rawReportResult.isFailure) {
+                val reportErr = rawReportResult.exceptionOrNull()?.message ?: "AdMob network report failed"
+                logAdMob("NetworkReport:Error", reportErr)
+                throw Exception("AdMob Report Error: $reportErr")
+            }
+            parseReportRows(rawReportResult.getOrThrow(), reportRows)
+            logAdMob("ReportSelection", "Using Network Report: parsed ${reportRows.size} rows")
+        }
+
+        if (reportRows.isNotEmpty()) {
+            cacheLock.withLock {
+                reportCache = ReportCache(accountName, source, reportRows.toList(), nowMs(), todayKey)
+            }
+        }
+        return reportRows
+    }
+
     companion object {
+        private const val META_TTL_MS = 6 * 60 * 60 * 1000L
+        private const val LIFETIME_TTL_MS = 60 * 60 * 1000L
+        private const val FULL_REPORT_TTL_MS = 24 * 60 * 60 * 1000L
+        private const val INCREMENTAL_DAYS = 3
+
+        /** Contiguous YYYYMMDD key range covering [daysBack] days back through [today] (inclusive). */
+        private fun keyRange(today: LocalDate, fromDaysBack: Int, toDaysBack: Int): ClosedRange<String> =
+            formatDateKey(today.minus(fromDaysBack, DateTimeUnit.DAY))..formatDateKey(today.minus(toDaysBack, DateTimeUnit.DAY))
+
         val jsonParser = Json {
             ignoreUnknownKeys = true
             isLenient = true
@@ -516,6 +626,8 @@ class AdMobApiClient(
             val earnings = earningsMicros / 1_000_000.0
             val imps = metrics["IMPRESSIONS"]?.jsonObject?.get("integerValue")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
             val clicks = metrics["CLICKS"]?.jsonObject?.get("integerValue")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+            val adRequests = metrics["AD_REQUESTS"]?.jsonObject?.get("integerValue")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+            val matchedRequests = metrics["MATCHED_REQUESTS"]?.jsonObject?.get("integerValue")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
 
             if (dateStr.isNotBlank()) {
                 outRows.add(
@@ -527,7 +639,9 @@ class AdMobApiClient(
                         country = country,
                         earnings = earnings,
                         impressions = imps,
-                        clicks = clicks
+                        clicks = clicks,
+                        adRequests = adRequests,
+                        matchedRequests = matchedRequests
                     )
                 )
             }
@@ -583,10 +697,23 @@ class AdMobApiClient(
             val yesterday = today.minus(1, DateTimeUnit.DAY)
             val yesterdayStr = formatDateKey(yesterday)
 
-            // Dynamically scale daily goal based on recent 7-day average if available, min 10.0
-            val recent7Days = (6 downTo 0).map { formatDateKey(today.minus(it, DateTimeUnit.DAY)) }
-            val recent7Rev = rows.filter { it.date in recent7Days }.sumOf { it.earnings }
-            val avgDaily = if (recent7Rev > 0) (recent7Rev / 7.0) else 0.0
+            // Dynamically scale daily goal based on recent completed 7-day average if available, min 10.0.
+            // Using completed days (yesterday through 7 days ago) avoids partial-day distortion in the morning.
+            val recentCompleted7Days = keyRange(today, 7, 1)
+            val recentCompletedRows = rows.filter { it.date in recentCompleted7Days }
+            val recent7Rev = recentCompletedRows.sumOf { it.earnings }
+            val distinctDaysWithData = recentCompletedRows.map { it.date }.distinct().size
+
+            val (effectiveRev, daysDivisor) = if (recent7Rev > 0.0) {
+                recent7Rev to maxOf(1, distinctDaysWithData)
+            } else {
+                val recent7Days = keyRange(today, 6, 0)
+                val rRows = rows.filter { it.date in recent7Days }
+                val rRev = rRows.sumOf { it.earnings }
+                val dCount = rRows.map { it.date }.distinct().size
+                rRev to maxOf(1, dCount)
+            }
+            val avgDaily = if (effectiveRev > 0.0) (effectiveRev / daysDivisor.toDouble()) else 0.0
             val computedDailyGoal = when {
                 avgDaily >= 100.0 -> ((avgDaily * 1.25) / 50.0).roundToLong() * 50.0
                 avgDaily >= 10.0 -> ((avgDaily * 1.25) / 10.0).roundToLong() * 10.0
@@ -617,10 +744,12 @@ class AdMobApiClient(
                         deltaAmount = deltaAmt,
                         deltaPercentage = deltaPct,
                         dailyGoal = effectiveDailyGoal,
-                        dailyGoalProgress = if (todayRev > 0) (todayRev / effectiveDailyGoal).toFloat().coerceIn(0f, 1f) else 0f,
+                        periodGoal = effectiveDailyGoal,
+                        periodDays = 1,
+                        dailyGoalProgress = if (todayRev > 0) (todayRev / effectiveDailyGoal).toFloat().coerceAtLeast(0f) else 0f,
                         ecpm = avgEcpm,
                         impressions = totalImp,
-                        fillRate = if (totalImp > 0) 99.2 else 0.0,
+                        fillRate = matchRate(todayRows),
                         lastSyncTime = run {
                             val maskedPub = maskPublisherId(publisherId)
                             if (maskedPub.isNotBlank()) "Live • AdMob API ($maskedPub)" else "Live • AdMob API"
@@ -653,10 +782,12 @@ class AdMobApiClient(
                         deltaAmount = deltaAmt,
                         deltaPercentage = deltaPct,
                         dailyGoal = effectiveDailyGoal,
-                        dailyGoalProgress = if (yestRev > 0) (yestRev / effectiveDailyGoal).toFloat().coerceIn(0f, 1f) else 0f,
+                        periodGoal = effectiveDailyGoal,
+                        periodDays = 1,
+                        dailyGoalProgress = if (yestRev > 0) (yestRev / effectiveDailyGoal).toFloat().coerceAtLeast(0f) else 0f,
                         ecpm = avgEcpm,
                         impressions = totalImp,
-                        fillRate = if (totalImp > 0) 99.2 else 0.0,
+                        fillRate = matchRate(yesterdayRows),
                         lastSyncTime = "Finalized Yesterday",
                         currencyCode = currencyCode,
                         currencySymbol = currencySymbol,
@@ -667,8 +798,8 @@ class AdMobApiClient(
                 }
 
                 TimeRange.LAST_7_DAYS -> {
-                    val days7 = (6 downTo 0).map { formatDateKey(today.minus(it, DateTimeUnit.DAY)) }
-                    val prev7 = (13 downTo 7).map { formatDateKey(today.minus(it, DateTimeUnit.DAY)) }
+                    val days7 = keyRange(today, 6, 0)
+                    val prev7 = keyRange(today, 13, 7)
 
                     val curRows = rows.filter { it.date in days7 }
                     val prevRows = rows.filter { it.date in prev7 }
@@ -688,11 +819,13 @@ class AdMobApiClient(
                         yesterdayRevenue = prevRev,
                         deltaAmount = deltaAmt,
                         deltaPercentage = deltaPct,
-                        dailyGoal = periodGoal,
-                        dailyGoalProgress = if (curRev > 0) (curRev / periodGoal).toFloat().coerceIn(0f, 1f) else 0f,
+                        dailyGoal = effectiveDailyGoal,
+                        periodGoal = periodGoal,
+                        periodDays = 7,
+                        dailyGoalProgress = if (curRev > 0) (curRev / periodGoal).toFloat().coerceAtLeast(0f) else 0f,
                         ecpm = avgEcpm,
                         impressions = totalImp,
-                        fillRate = if (totalImp > 0) 99.2 else 0.0,
+                        fillRate = matchRate(curRows),
                         lastSyncTime = "Past 7 Days Total",
                         currencyCode = currencyCode,
                         currencySymbol = currencySymbol,
@@ -702,9 +835,54 @@ class AdMobApiClient(
                     )
                 }
 
+                TimeRange.THIS_MONTH -> {
+                    // Month-to-date, compared with the same number of days at the start of last month (AdMob style)
+                    val monthStart = LocalDate(today.year, today.month, 1)
+                    val elapsedDays = today.day
+                    val prevMonthStart = monthStart.minus(1, DateTimeUnit.MONTH)
+                    val prevMonthEnd = monthStart.minus(1, DateTimeUnit.DAY)
+                    val prevCompareEnd = minOf(prevMonthStart.plus(elapsedDays - 1, DateTimeUnit.DAY), prevMonthEnd)
+                    val curRange = formatDateKey(monthStart)..formatDateKey(today)
+                    val prevRange = formatDateKey(prevMonthStart)..formatDateKey(prevCompareEnd)
+
+                    val curRows = rows.filter { it.date in curRange }
+                    val prevRows = rows.filter { it.date in prevRange }
+
+                    val curRev = roundTwoDecimals(curRows.sumOf { it.earnings })
+                    val prevRev = roundTwoDecimals(prevRows.sumOf { it.earnings })
+                    val deltaAmt = roundTwoDecimals(curRev - prevRev)
+                    val deltaPct = if (prevRev > 0) roundOneDecimal(((curRev - prevRev) / prevRev) * 100.0) else 0.0
+                    val totalImp = curRows.sumOf { it.impressions }
+                    val totalClicks = curRows.sumOf { it.clicks }
+                    val avgEcpm = if (totalImp > 0) roundTwoDecimals((curRev / totalImp) * 1000.0) else 0.0
+                    val computedCtr = if (totalImp > 0) roundTwoDecimals((totalClicks.toDouble() / totalImp.toDouble()) * 100.0) else 0.0
+                    val daysInMonth = daysInMonth(today)
+                    val monthGoal = effectiveDailyGoal * daysInMonth
+
+                    AccountSummary(
+                        todayRevenue = curRev,
+                        yesterdayRevenue = prevRev,
+                        deltaAmount = deltaAmt,
+                        deltaPercentage = deltaPct,
+                        dailyGoal = effectiveDailyGoal,
+                        periodGoal = monthGoal,
+                        periodDays = daysInMonth,
+                        dailyGoalProgress = if (curRev > 0) (curRev / monthGoal).toFloat().coerceAtLeast(0f) else 0f,
+                        ecpm = avgEcpm,
+                        impressions = totalImp,
+                        fillRate = matchRate(curRows),
+                        lastSyncTime = "Month to date (${elapsedDays}d)",
+                        currencyCode = currencyCode,
+                        currencySymbol = currencySymbol,
+                        ctr = computedCtr,
+                        clicks = totalClicks,
+                        isCustomGoal = isCustom
+                    )
+                }
+
                 TimeRange.DAYS_30 -> {
-                    val days30 = (29 downTo 0).map { formatDateKey(today.minus(it, DateTimeUnit.DAY)) }
-                    val prev30 = (59 downTo 30).map { formatDateKey(today.minus(it, DateTimeUnit.DAY)) }
+                    val days30 = keyRange(today, 29, 0)
+                    val prev30 = keyRange(today, 59, 30)
 
                     val curRows = rows.filter { it.date in days30 }
                     val prevRows = rows.filter { it.date in prev30 }
@@ -724,11 +902,13 @@ class AdMobApiClient(
                         yesterdayRevenue = prevRev,
                         deltaAmount = deltaAmt,
                         deltaPercentage = deltaPct,
-                        dailyGoal = monthlyGoal,
-                        dailyGoalProgress = if (curRev > 0) (curRev / monthlyGoal).toFloat().coerceIn(0f, 1f) else 0f,
+                        dailyGoal = effectiveDailyGoal,
+                        periodGoal = monthlyGoal,
+                        periodDays = 30,
+                        dailyGoalProgress = if (curRev > 0) (curRev / monthlyGoal).toFloat().coerceAtLeast(0f) else 0f,
                         ecpm = avgEcpm,
                         impressions = totalImp,
-                        fillRate = if (totalImp > 0) 99.2 else 0.0,
+                        fillRate = matchRate(curRows),
                         lastSyncTime = "Past 30 Days Total",
                         currencyCode = currencyCode,
                         currencySymbol = currencySymbol,
@@ -739,8 +919,10 @@ class AdMobApiClient(
                 }
 
                 TimeRange.CUSTOM -> {
-                    val startStr = if (customStartDate != null) formatDateKey(customStartDate) else formatDateKey(today.minus(30, DateTimeUnit.DAY))
-                    val endStr = if (customEndDate != null) formatDateKey(customEndDate) else todayStr
+                    val start = customStartDate ?: today.minus(29, DateTimeUnit.DAY)
+                    val end = customEndDate ?: today
+                    val startStr = formatDateKey(start)
+                    val endStr = formatDateKey(end)
 
                     val filteredRows = rows.filter { it.date in startStr..endStr }
                     val totalRev = roundTwoDecimals(filteredRows.sumOf { it.earnings })
@@ -748,13 +930,8 @@ class AdMobApiClient(
                     val totalClicks = filteredRows.sumOf { it.clicks }
                     val avgEcpm = if (totalImp > 0) roundTwoDecimals((totalRev / totalImp) * 1000.0) else 0.0
                     val computedCtr = if (totalImp > 0) roundTwoDecimals((totalClicks.toDouble() / totalImp.toDouble()) * 100.0) else 0.0
-                    val daysCount = if (customStartDate != null && customEndDate != null) {
-                        val days = (customEndDate.toEpochDays() - customStartDate.toEpochDays()) + 1
-                        maxOf(1, days)
-                    } else {
-                        30
-                    }
-                    val periodGoal = effectiveDailyGoal * daysCount
+                    val daysCount = maxOf(1L, (end.toEpochDays() - start.toEpochDays()) + 1L).toInt()
+                    val periodGoal = effectiveDailyGoal * daysCount.toDouble()
 
                     val rangeLabel = if (customStartDate != null && customEndDate != null) {
                         "${customStartDate.month.number}/${customStartDate.day} - ${customEndDate.month.number}/${customEndDate.day}"
@@ -767,11 +944,13 @@ class AdMobApiClient(
                         yesterdayRevenue = 0.0,
                         deltaAmount = totalRev,
                         deltaPercentage = 0.0,
-                        dailyGoal = periodGoal,
-                        dailyGoalProgress = if (totalRev > 0) (totalRev / periodGoal).toFloat().coerceIn(0f, 1f) else 0f,
+                        dailyGoal = effectiveDailyGoal,
+                        periodGoal = periodGoal,
+                        periodDays = daysCount,
+                        dailyGoalProgress = if (totalRev > 0) (totalRev / periodGoal).toFloat().coerceAtLeast(0f) else 0f,
                         ecpm = avgEcpm,
                         impressions = totalImp,
-                        fillRate = if (totalImp > 0) 99.2 else 0.0,
+                        fillRate = matchRate(filteredRows),
                         lastSyncTime = rangeLabel,
                         currencyCode = currencyCode,
                         currencySymbol = currencySymbol,
@@ -793,10 +972,14 @@ class AdMobApiClient(
         ): List<AppMonetization> {
             val todayStr = formatDateKey(today)
             val yesterdayStr = formatDateKey(today.minus(1, DateTimeUnit.DAY))
-            val days7 = (6 downTo 0).map { formatDateKey(today.minus(it, DateTimeUnit.DAY)) }
-            val days30 = (29 downTo 0).map { formatDateKey(today.minus(it, DateTimeUnit.DAY)) }
+            val days7 = keyRange(today, 6, 0)
+            val days30 = keyRange(today, 29, 0)
             val customStartStr = if (customStartDate != null) formatDateKey(customStartDate) else formatDateKey(today.minus(30, DateTimeUnit.DAY))
             val customEndStr = if (customEndDate != null) formatDateKey(customEndDate) else todayStr
+            val monthStartStr = formatDateKey(LocalDate(today.year, today.month, 1))
+            val (curStart, curEnd) = rangeWindow(range, today, customStartDate, customEndDate)
+            val spanDays = (curEnd.toEpochDays() - curStart.toEpochDays()).toInt() + 1
+            val prevRange = formatDateKey(curStart.minus(spanDays, DateTimeUnit.DAY))..formatDateKey(curStart.minus(1, DateTimeUnit.DAY))
 
             // Build map of registered apps by ID and lowercase name for quick lookup
             val regAppById = registeredApps.associateBy { it.id }
@@ -823,11 +1006,13 @@ class AdMobApiClient(
                     TimeRange.TODAY -> appRows.filter { it.date == todayStr }
                     TimeRange.YESTERDAY -> appRows.filter { it.date == yesterdayStr }
                     TimeRange.LAST_7_DAYS -> appRows.filter { it.date in days7 }
+                    TimeRange.THIS_MONTH -> appRows.filter { it.date in monthStartStr..todayStr }
                     TimeRange.DAYS_30 -> appRows.filter { it.date in days30 }
                     TimeRange.CUSTOM -> appRows.filter { it.date in customStartStr..customEndStr }
                 }
 
-                val yesterdayRows = appRows.filter { it.date == yesterdayStr }
+                // Compare against the previous period of equal length (not always "yesterday")
+                val yesterdayRows = appRows.filter { it.date in prevRange }
 
                 val periodRev = roundTwoDecimals(activeRows.sumOf { it.earnings })
                 val yestRev = roundTwoDecimals(yesterdayRows.sumOf { it.earnings })
@@ -851,7 +1036,7 @@ class AdMobApiClient(
                         revenue = fRev,
                         ecpm = fEcpm,
                         impressions = fImp,
-                        fillRate = 99.0,
+                        fillRate = matchRate(fRows),
                         sharePercent = share
                     )
                 }
@@ -865,7 +1050,7 @@ class AdMobApiClient(
                         todayRevenue = periodRev,
                         deltaVsYesterday = delta,
                         totalImpressions = totalImp,
-                        fillRate = if (totalImp > 0) 99.2 else 0.0,
+                        fillRate = matchRate(activeRows),
                         avgEcpm = avgEcpm,
                         formats = formats,
                         appStoreId = matchedRegApp?.appStoreId,
@@ -875,9 +1060,13 @@ class AdMobApiClient(
             }
 
             // 2. Add registered apps from AdMob console that had 0 rows in the report
+            val seenIds = appsList.mapTo(HashSet()) { it.id }
+            val seenNames = appsList.mapTo(HashSet()) { it.name.lowercase() }
             registeredApps.forEach { regApp ->
-                if (appsList.none { it.id == regApp.id || it.name.equals(regApp.name, ignoreCase = true) }) {
+                if (regApp.id !in seenIds && regApp.name.lowercase() !in seenNames) {
                     appsList.add(regApp)
+                    seenIds.add(regApp.id)
+                    seenNames.add(regApp.name.lowercase())
                 }
             }
 
@@ -892,16 +1081,18 @@ class AdMobApiClient(
             return when (range) {
                 AnalyticsRange.DAYS_7 -> {
                     val days = (6 downTo 0).map { today.minus(it, DateTimeUnit.DAY) }
-                    val dateStrings = days.map { formatDateKey(it) }
-                    val filteredRows = rows.filter { it.date in dateStrings }
+                    val dateRange = keyRange(today, 6, 0)
+                    val filteredRows = rows.filter { it.date in dateRange }
 
                     val totalRev = roundTwoDecimals(filteredRows.sumOf { it.earnings })
                     val totalImp = filteredRows.sumOf { it.impressions }
                     val avgEcpm = if (totalImp > 0) roundTwoDecimals((totalRev / totalImp) * 1000.0) else 0.0
 
+                    val revByDate = HashMap<String, Double>()
+                    filteredRows.forEach { revByDate[it.date] = (revByDate[it.date] ?: 0.0) + it.earnings }
                     val trendPoints = days.mapIndexed { idx, day ->
                         val dStr = formatDateKey(day)
-                        val dayRev = roundTwoDecimals(filteredRows.filter { it.date == dStr }.sumOf { it.earnings })
+                        val dayRev = roundTwoDecimals(revByDate[dStr] ?: 0.0)
                         val label = when (day.dayOfWeek.name) {
                             "MONDAY" -> "Mon"
                             "TUESDAY" -> "Tue"
@@ -934,20 +1125,21 @@ class AdMobApiClient(
 
                 AnalyticsRange.DAYS_30 -> {
                     val days = (29 downTo 0).map { today.minus(it, DateTimeUnit.DAY) }
-                    val dateStrings = days.map { formatDateKey(it) }
-                    val filteredRows = rows.filter { it.date in dateStrings }
+                    val dateRange = keyRange(today, 29, 0)
+                    val filteredRows = rows.filter { it.date in dateRange }
 
                     val totalRev = roundTwoDecimals(filteredRows.sumOf { it.earnings })
                     val totalImp = filteredRows.sumOf { it.impressions }
                     val avgEcpm = if (totalImp > 0) roundTwoDecimals((totalRev / totalImp) * 1000.0) else 0.0
+                    val revByDate = HashMap<String, Double>()
+                    filteredRows.forEach { revByDate[it.date] = (revByDate[it.date] ?: 0.0) + it.earnings }
 
-                    // Group into 4 weekly points
-                    val chunkedDays = days.chunked(7)
+                    // 5 even 6-day buckets (previously chunked(7) produced a misleading 2-day "W5")
+                    val chunkedDays = days.chunked(6)
                     val trendPoints = chunkedDays.mapIndexed { idx, weekDays ->
-                        val weekDateStrings = weekDays.map { formatDateKey(it) }
-                        val weekRev = roundTwoDecimals(filteredRows.filter { it.date in weekDateStrings }.sumOf { it.earnings })
+                        val weekRev = roundTwoDecimals(weekDays.sumOf { revByDate[formatDateKey(it)] ?: 0.0 })
                         RevenuePoint(
-                            dayLabel = "W${idx + 1}",
+                            dayLabel = "${weekDays.first().month.number}/${weekDays.first().day}",
                             amount = weekRev,
                             isCurrentOrPeak = (idx == chunkedDays.lastIndex)
                         )
@@ -968,8 +1160,8 @@ class AdMobApiClient(
 
                 AnalyticsRange.DAYS_90 -> {
                     val days = (89 downTo 0).map { today.minus(it, DateTimeUnit.DAY) }
-                    val dateStrings = days.map { formatDateKey(it) }
-                    val filteredRows = rows.filter { it.date in dateStrings }
+                    val dateRange = keyRange(today, 89, 0)
+                    val filteredRows = rows.filter { it.date in dateRange }
 
                     val totalRev = roundTwoDecimals(filteredRows.sumOf { it.earnings })
                     val totalImp = filteredRows.sumOf { it.impressions }
@@ -1071,6 +1263,33 @@ class AdMobApiClient(
                 policyIssuesCount = 0,
                 pastPayouts = emptyList()
             )
+        }
+
+        /** Real AdMob match rate (matched requests / ad requests). 0 when the API didn't return request metrics. */
+        fun matchRate(rows: List<AdMobReportRow>): Double {
+            val req = rows.sumOf { it.adRequests }
+            if (req <= 0L) return 0.0
+            return roundOneDecimal(rows.sumOf { it.matchedRequests }.toDouble() / req.toDouble() * 100.0)
+        }
+
+        fun daysInMonth(date: LocalDate): Int {
+            val first = LocalDate(date.year, date.month, 1)
+            return first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY).day
+        }
+
+        /** Inclusive [start, end] dates covered by a [TimeRange]. */
+        fun rangeWindow(
+            range: TimeRange,
+            today: LocalDate,
+            customStartDate: LocalDate? = null,
+            customEndDate: LocalDate? = null
+        ): Pair<LocalDate, LocalDate> = when (range) {
+            TimeRange.TODAY -> today to today
+            TimeRange.YESTERDAY -> today.minus(1, DateTimeUnit.DAY).let { it to it }
+            TimeRange.LAST_7_DAYS -> today.minus(6, DateTimeUnit.DAY) to today
+            TimeRange.THIS_MONTH -> LocalDate(today.year, today.month, 1) to today
+            TimeRange.DAYS_30 -> today.minus(29, DateTimeUnit.DAY) to today
+            TimeRange.CUSTOM -> (customStartDate ?: today.minus(29, DateTimeUnit.DAY)) to (customEndDate ?: today)
         }
 
         private fun roundTwoDecimals(v: Double): Double {
