@@ -40,4 +40,4 @@ fi
 RENDER_API="${SKIKO_RENDER_API:-SOFTWARE_FAST}"
 JAVA_OPTS="-Xms64m -Xmx512m -Dskiko.renderApi=$RENDER_API"
 
-exec "$JAVA_EXEC" $JAVA_OPTS -cp "$APP_HOME/lib/*" com.solarad.app.desktop.MainKt "$@"
+exec "$JAVA_EXEC" $JAVA_OPTS -cp "$APP_HOME/lib/*" com.lavish.admob.desktop.MainKt "$@"

@@ -44,7 +44,7 @@ kotlin {
 
 compose.desktop {
     application {
-        mainClass = "com.solarad.app.desktop.MainKt"
+        mainClass = "com.lavish.admob.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "AdDash"

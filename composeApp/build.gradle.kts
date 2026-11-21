@@ -27,11 +27,11 @@ val generateMixpanelConfig by tasks.registering {
     inputs.property("mixpanelToken", mixpanelToken)
     outputs.dir(generatedOutputDir)
     doLast {
-        val targetFile = generatedOutputDir.get().file("com/solarad/app/analytics/MixpanelConfig.kt").asFile
+        val targetFile = generatedOutputDir.get().file("com/lavish/admob/analytics/MixpanelConfig.kt").asFile
         targetFile.parentFile.mkdirs()
         targetFile.writeText(
             """
-            package com.solarad.app.analytics
+            package com.lavish.admob.analytics
 
             /**
              * Auto-generated Mixpanel configuration.
@@ -126,6 +126,6 @@ kotlin {
 
 compose.resources {
     publicResClass = false
-    packageOfResClass = "com.solarad.app.resources"
+    packageOfResClass = "com.lavish.admob.resources"
     generateResClass = always
 }

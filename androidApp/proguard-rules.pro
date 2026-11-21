@@ -15,8 +15,8 @@
 
 # --- App Data Models & Serialization ---
 # Keep only our app models and serializers to allow full R8 optimization everywhere else
--keep class com.solarad.app.model.** { *; }
--keepclassmembers class com.solarad.app.model.** { *; }
+-keep class com.lavish.admob.model.** { *; }
+-keepclassmembers class com.lavish.admob.model.** { *; }
 
 -keepclassmembers class * {
     @kotlinx.serialization.SerialName <fields>;

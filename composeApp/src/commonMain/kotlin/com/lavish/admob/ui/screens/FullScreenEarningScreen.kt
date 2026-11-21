@@ -1,0 +1,329 @@
+package com.lavish.admob.ui.screens
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.lavish.admob.model.AccountSummary
+import com.lavish.admob.theme.BotanicalGreen
+import com.lavish.admob.theme.BotanicalGreenDark
+import com.lavish.admob.theme.BotanicalGreenLight
+import com.lavish.admob.theme.SolarAmber
+import com.lavish.admob.theme.SolarTheme
+import com.lavish.admob.ui.components.CelebrationConfetti
+import com.lavish.admob.ui.navigation.BackHandler
+import com.lavish.admob.ui.utils.PlatformLandscapeEffect
+import com.lavish.admob.ui.utils.formatAmount
+import com.lavish.admob.ui.utils.formatCompactNumber
+import kotlinx.coroutines.delay
+
+@Composable
+fun FullScreenEarningScreen(
+    summary: AccountSummary,
+    onExit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // 1. Force landscape orientation & hide system bars for distraction-free mode
+    PlatformLandscapeEffect(enabled = true, keepScreenOn = true)
+
+    // Handle back button to exit full screen
+    BackHandler(enabled = true) {
+        onExit()
+    }
+
+    // 2. Track increases to today's earnings to trigger celebration confetti
+    var celebrationTrigger by remember { mutableStateOf(0) }
+    var previousRevenue by remember { mutableStateOf<Double?>(null) }
+    // Bounce plays on EVERY increase; value is read only in graphicsLayer (draw phase), no recomposition
+    val bounce = remember { Animatable(1f) }
+
+    LaunchedEffect(summary.todayRevenue) {
+        val prev = previousRevenue
+        previousRevenue = summary.todayRevenue
+        if (prev != null && summary.todayRevenue > prev) {
+            celebrationTrigger++
+            bounce.animateTo(1.04f, tween(140, easing = FastOutSlowInEasing))
+            bounce.animateTo(1f, tween(220, easing = FastOutSlowInEasing))
+        }
+    }
+
+    // Deep navy HUD palette (matches the Play Store full-screen preview)
+    val navyCenter = Color(0xFF16233A)
+    val navyEdge = Color(0xFF0B0F17)
+    val textPrimaryColor = Color(0xFFFFFFFF)
+    val textSecondaryColor = Color(0xFF9AA0A6)
+    val statValueColor = Color(0xFFE8EAED)
+    val liveGreen = Color(0xFF81C995)
+    val liveDotGreen = Color(0xFF34D399)
+    val downRed = Color(0xFFF28B82)
+    val amountGlow = Color(0xFF8AB4F8)
+
+    // Controls visibility: auto-fades for absolute zero-distraction
+    var showControls by remember { mutableStateOf(true) }
+    LaunchedEffect(showControls) {
+        if (showControls) {
+            delay(4000L)
+            showControls = false
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(navyCenter, navyEdge),
+                    radius = 1400f
+                )
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                // Tapping only toggles exit button / controls visibility
+                showControls = !showControls
+            }
+    ) {
+        // Center: Distraction-free earnings display
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // ● LIVE · TODAY
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LiveDot(color = liveDotGreen)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "LIVE · TODAY",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp,
+                    color = liveGreen
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Big amount with a soft blue glow; bounces on every increase (draw-phase only)
+            Text(
+                text = "${summary.currencySymbol}${formatAmount(summary.todayRevenue)}",
+                fontSize = 96.sp,
+                fontWeight = FontWeight.Bold,
+                color = textPrimaryColor,
+                letterSpacing = (-2).sp,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                style = androidx.compose.ui.text.TextStyle(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = amountGlow.copy(alpha = 0.35f),
+                        blurRadius = 48f
+                    )
+                ),
+                modifier = Modifier.graphicsLayer {
+                    scaleX = bounce.value
+                    scaleY = bounce.value
+                }
+            )
+
+            // ▲ $132.40 vs yesterday
+            val delta = summary.todayRevenue - summary.yesterdayRevenue
+            val isUp = delta >= 0
+            Text(
+                text = "${if (isUp) "▲" else "▼"} ${summary.currencySymbol}${formatAmount(kotlin.math.abs(delta))} vs yesterday",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isUp) liveGreen else downRed
+            )
+
+            Spacer(modifier = Modifier.height(22.dp))
+
+            // eCPM · Impressions · Goal
+            val goalPct = if (summary.dailyGoal > 0.0) (summary.todayRevenue / summary.dailyGoal * 100).toInt() else 0
+            Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
+                HudStat("eCPM", "${summary.currencySymbol}${formatAmount(summary.ecpm)}", textSecondaryColor, statValueColor)
+                HudStat("Impressions", formatCompactNumber(summary.impressions), textSecondaryColor, statValueColor)
+                HudStat("Goal", "$goalPct%", textSecondaryColor, statValueColor)
+            }
+        }
+
+        // Top-Right Exit Button (Fade in/out for zero distraction)
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn(tween(250)),
+            exit = fadeOut(tween(400)),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(20.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.55f),
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .clickable { onExit() }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Exit Full Screen",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+
+        // Top-Left Mini Pill indicating Full Screen
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn(tween(250)),
+            exit = fadeOut(tween(400)),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(20.dp)
+        ) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(999.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FullscreenExit,
+                        contentDescription = null,
+                        tint = textSecondaryColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Tap screen to exit",
+                        fontSize = 11.sp,
+                        color = textSecondaryColor,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        // Celebration Confetti Layer (Bursts on revenue changes)
+        CelebrationConfetti(
+            triggerKey = celebrationTrigger.takeIf { it > 0 },
+            particleCount = 140
+        )
+    }
+}
+
+
+@Composable
+private fun HudStat(label: String, value: String, labelColor: Color, valueColor: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = label, fontSize = 15.sp, fontWeight = FontWeight.Normal, color = labelColor)
+        Text(text = value, fontSize = 21.sp, fontWeight = FontWeight.Bold, color = valueColor)
+    }
+}
+
+/** Isolated so its infinite animation only invalidates this layer's draw, not the whole HUD. */
+@Composable
+private fun LiveDot(color: Color) {
+    val t = rememberInfiniteTransition(label = "liveDot")
+    val alpha = t.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "liveDotAlpha"
+    )
+    Box(
+        modifier = Modifier
+            .size(12.dp)
+            .graphicsLayer { this.alpha = alpha.value }
+            .background(Brush.radialGradient(listOf(color.copy(alpha = 0.55f), Color.Transparent)), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(Modifier.size(9.dp).clip(CircleShape).background(color))
+    }
+}
+
+@Composable
+private fun PulsingArrow(tint: Color) {
+    val t = rememberInfiniteTransition(label = "arrow")
+    val offset = t.animateFloat(
+        initialValue = 0f,
+        targetValue = -6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "arrowOffset"
+    )
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+        contentDescription = "Earnings Going Up",
+        tint = tint,
+        modifier = Modifier
+            .size(40.dp)
+            .graphicsLayer {
+                val sc = 1f + (offset.value / 60f)
+                scaleX = sc
+                scaleY = sc
+            }
+    )
+}

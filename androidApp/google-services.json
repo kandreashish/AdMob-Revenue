@@ -14,11 +14,27 @@
       },
       "oauth_client": [
         {
-          "client_id": "623789927018-m1k6p5hujeic4j6qdjjme8tn7h9tsah4.apps.googleusercontent.com",
+          "client_id": "623789927018-2v5isbor86bkr9cugf53544gfcg2tchu.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.lavish.admob",
-            "certificate_hash": "f30ba550eea883120bdfac682cf5266015fe842a"
+            "certificate_hash": "fea7ec5a2b4bc9549ceb306147754aedcaae5cb1"
+          }
+        },
+        {
+          "client_id": "623789927018-7uvvpnd9ice1dg2up73rc2ofhmd7450e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lavish.admob",
+            "certificate_hash": "fc245216a15ac6f5e124d42bb8ceb33fb6f5fc8d"
+          }
+        },
+        {
+          "client_id": "623789927018-ohs5oihm7r34fpobssro9k49v29076rh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lavish.admob",
+            "certificate_hash": "83010ec0085364a806dd198138fc7a0c30299ed3"
           }
         },
         {
