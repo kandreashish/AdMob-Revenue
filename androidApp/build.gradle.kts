@@ -79,6 +79,12 @@ android {
         }
     }
 
+    // Don't embed the (encrypted) dependency list blob in the APK; Play Console doesn't need it for sideloads.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

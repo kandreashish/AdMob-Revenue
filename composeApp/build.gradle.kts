@@ -86,7 +86,7 @@ kotlin {
     sourceSets {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
-            implementation(libs.ktor.client.okhttp)
+            implementation(libs.ktor.client.android)
         }
         jvmMain.dependencies {
             implementation(libs.ktor.client.okhttp)

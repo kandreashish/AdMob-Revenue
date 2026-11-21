@@ -36,3 +36,12 @@
 -dontwarn okio.**
 -dontwarn io.ktor.**
 -dontwarn com.russhwolf.settings.**
+
+# --- Size ---
+# Flatten package names into the root package: smaller dex string tables.
+-repackageclasses ''
+-allowaccessmodification
+# Strip warning/error logs too (release only); crash reporting uses stack traces, not Log.
+-assumenosideeffects class android.util.Log {
+    public static int w(...);
+}
