@@ -1,12 +1,13 @@
 default_platform(:android)
 
 platform :android do
-  desc "Deploy a new version to Google Play (draft release for draft apps)"
-  lane :deploy do
+  desc "Deploy a new version to Google Play Production track"
+  lane :deploy do |options|
+    status = options[:status] || "completed"
     upload_to_play_store(
       track: "production",
       aab: File.expand_path("../build/outputs/bundle/release/androidApp-release.aab", __dir__),
-      release_status: "draft",
+      release_status: status,
       skip_upload_apk: true,
       skip_upload_metadata: true,
       skip_upload_images: true,

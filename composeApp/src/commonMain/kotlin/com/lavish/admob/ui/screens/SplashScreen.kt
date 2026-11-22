@@ -1,5 +1,10 @@
 package com.lavish.admob.ui.screens
 
+import com.lavish.admob.resources.app_icon_foreground
+import com.lavish.admob.resources.Res
+import org.jetbrains.compose.resources.painterResource
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -53,9 +58,6 @@ private val AdMobRedMid = Color(0xFFD93025)
 private val AdMobRedDark = Color(0xFF670503)
 
 private val GoldLight = Color(0xFFFEF7E0)
-private val GoldMid = Color(0xFF3367D6)
-private val GoldDark = Color(0xFF185ABC)
-private val GoldText = Color(0xFF174EA6)
 
 private val SplashGlowBrush = Brush.radialGradient(
     colors = listOf(Color.White.copy(alpha = 0.25f), Color.Transparent)
@@ -183,10 +185,8 @@ fun SplashScreen(
 }
 
 /**
- * High-fidelity Canvas rendering of the AdCash App Icon:
- * - AdMob red gradient squircle
- * - Gold coin stamped with $
- * - Intertwining folded ribbon A
+ * The real launcher icon: the same foreground artwork as the Android adaptive icon
+ * (gold coin + rising arrow + dash lines) on the AdMob-red squircle, so the splash matches the home-screen icon.
  */
 @Composable
 fun AdCashIconBadge(modifier: Modifier = Modifier) {
@@ -196,96 +196,18 @@ fun AdCashIconBadge(modifier: Modifier = Modifier) {
             .clip(RoundedCornerShape(26.dp))
             .background(
                 Brush.linearGradient(
-                    colors = listOf(AdMobRedStart, AdMobRedMid, AdMobRedDark),
-                    start = Offset.Zero,
-                    end = Offset.Infinite
+                    // Same AdMob red gradient as the launcher icon background
+                    colors = listOf(Color(0xFFEA4335), Color(0xFFB3261E))
                 )
             ),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-
-            // 1. Subtle inner stroke highlight
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color.White.copy(alpha = 0.35f), Color.Transparent)
-                ),
-                cornerRadius = CornerRadius(26.dp.toPx(), 26.dp.toPx()),
-                style = Stroke(width = 2.dp.toPx())
-            )
-
-            // 2. Golden Coin
-            val coinCenter = Offset(w * 0.52f, h * 0.49f)
-            val coinRadius = w * 0.26f
-
-            // Coin Base
-            drawCircle(
-                brush = Brush.linearGradient(
-                    colors = listOf(GoldLight, GoldMid, GoldDark),
-                    start = Offset(coinCenter.x - coinRadius, coinCenter.y - coinRadius),
-                    end = Offset(coinCenter.x + coinRadius, coinCenter.y + coinRadius)
-                ),
-                radius = coinRadius,
-                center = coinCenter
-            )
-
-            // Coin Rim Specular
-            drawCircle(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color.White.copy(alpha = 0.8f), GoldMid)
-                ),
-                radius = coinRadius * 0.90f,
-                center = coinCenter,
-                style = Stroke(width = 2.dp.toPx())
-            )
-
-            // Ribbon Fold 1: White Upward Beam (left leg of 'A')
-            val ribbonPath1 = Path().apply {
-                moveTo(w * 0.25f, h * 0.76f)
-                lineTo(w * 0.44f, h * 0.24f)
-                lineTo(w * 0.54f, h * 0.24f)
-                lineTo(w * 0.35f, h * 0.76f)
-                close()
-            }
-            drawPath(
-                path = ribbonPath1,
-                brush = Brush.linearGradient(
-                    colors = listOf(Color.White, Color(0xFFFCE8E6))
-                )
-            )
-
-            // Ribbon Fold 2: Red Cross Bar (cross of 'A')
-            val ribbonPath2 = Path().apply {
-                moveTo(w * 0.46f, h * 0.48f)
-                lineTo(w * 0.76f, h * 0.76f)
-                lineTo(w * 0.65f, h * 0.76f)
-                lineTo(w * 0.38f, h * 0.48f)
-                close()
-            }
-            drawPath(
-                path = ribbonPath2,
-                brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFFFF5252), Color(0xFFD93025))
-                )
-            )
-
-            // Apex accent circle
-            drawCircle(
-                color = Color.White,
-                radius = w * 0.035f,
-                center = Offset(w * 0.44f, h * 0.25f)
-            )
-        }
-
-        // Center dollar text on coin
-        Text(
-            text = "$",
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Black,
-            color = GoldText,
-            modifier = Modifier.padding(start = 6.dp, top = 2.dp)
+        // Adaptive-icon foregrounds are 108dp with a 72dp visible area: scale up so it's framed like the launcher.
+        Image(
+            painter = painterResource(Res.drawable.app_icon_foreground),
+            contentDescription = "AdDash",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }
         )
     }
 }

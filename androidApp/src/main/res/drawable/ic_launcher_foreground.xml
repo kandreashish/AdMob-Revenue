@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AdDash icon: gold coin with a rising trend arrow, dashing forward. 108dp adaptive grid, art in the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- motion "dash" lines -->
+    <path android:strokeColor="#FFFFFF" android:strokeAlpha="0.8" android:strokeWidth="4.4"
+        android:strokeLineCap="round" android:pathData="M35.2,47 L39.8,47" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="4.4"
+        android:strokeLineCap="round" android:pathData="M29.2,54 L39.8,54" />
+    <path android:strokeColor="#FFFFFF" android:strokeAlpha="0.8" android:strokeWidth="4.4"
+        android:strokeLineCap="round" android:pathData="M37.2,61 L39.8,61" />
+    <!-- coin -->
+    <path android:fillColor="#FBBC04"
+        android:pathData="M64,36 a18,18 0 1,1 0,36 a18,18 0 1,1 0,-36 z" />
+    <path android:strokeColor="#F29900" android:strokeWidth="2"
+        android:pathData="M64,39.5 a14.5,14.5 0 1,1 0,29 a14.5,14.5 0 1,1 0,-29 z" />
+    <!-- rising trend arrow -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="3.8"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M55,61 L60.5,55.5 L64.5,59 L71.5,51.5" />
+    <path android:fillColor="#FFFFFF" android:pathData="M74,49 L67,49.6 L73.4,56 Z" />
+</vector>

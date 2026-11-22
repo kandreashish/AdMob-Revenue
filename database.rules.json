@@ -1,5 +1,9 @@
 {
   "rules": {
+    "config": {
+      ".read": "auth != null",
+      ".write": false
+    },
     "bubble": {
       "$uid": {
         ".read": "auth.uid === $uid",

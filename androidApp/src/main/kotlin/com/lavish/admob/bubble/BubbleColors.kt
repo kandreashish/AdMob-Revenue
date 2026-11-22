@@ -5,7 +5,8 @@ package com.lavish.admob.bubble
  * Shared by the overlay bubble and the in-app size preview.
  */
 object BubbleColors {
-    val LOCKED = intArrayOf(0xFF5F6368.toInt(), 0xFF80868B.toInt())   // grey
+    /** Locked = call to action, so brand red rather than "disabled" grey. */
+    val LOCKED = intArrayOf(0xFFD93025.toInt(), 0xFFEA4335.toInt())
     val NO_GOAL = intArrayOf(0xFF3367D6.toInt(), 0xFF4285F4.toInt())  // blue #3367D6
 
     /** @param progress today / dailyGoal; null when there's no goal. */

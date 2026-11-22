@@ -107,7 +107,6 @@ fun FullScreenEarningScreen(
     val textSecondaryColor = Color(0xFF9AA0A6)
     val statValueColor = Color(0xFFE8EAED)
     val liveGreen = Color(0xFF81C995)
-    val liveDotGreen = Color(0xFF34D399)
     val downRed = Color(0xFFF28B82)
     val amountGlow = Color(0xFF8AB4F8)
 
@@ -148,14 +147,14 @@ fun FullScreenEarningScreen(
         ) {
             // ● LIVE · TODAY
             Row(verticalAlignment = Alignment.CenterVertically) {
-                LiveDot(color = liveDotGreen)
+                LiveDot(color = Color(0xFFEA4335)) // red "recording" style live dot
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "LIVE · TODAY",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.5.sp,
-                    color = liveGreen
+                    color = Color(0xFFF28B82)
                 )
             }
 

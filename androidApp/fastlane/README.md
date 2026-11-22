@@ -21,7 +21,7 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 [bundle exec] fastlane android deploy
 ```
 
-Deploy a new version to Google Play (draft release for draft apps)
+Deploy a new version to Google Play Production track
 
 ### android internal
 

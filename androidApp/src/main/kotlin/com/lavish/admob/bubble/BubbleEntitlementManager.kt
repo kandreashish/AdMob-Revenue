@@ -97,6 +97,7 @@ object BubbleEntitlementManager {
         if (started) return
         started = true
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        BubbleFirebase.startListeningConfig()
         trialDurationMs = BubbleFirebase.config().trialDurationMs
 
         db.getReference(".info/serverTimeOffset")
@@ -113,7 +114,15 @@ object BubbleEntitlementManager {
             if (newUid != uid || userRef == null) bindUser(newUid)
         }
 
-        // Tick every 30s so TrialActive -> TrialExpired flips promptly (matters for short test trials). so TrialActive -> TrialExpired flips without a DB change.
+        // React immediately whenever trial duration is changed by admin in Firebase RTDB
+        scope.launch {
+            BubbleFirebase.configState.collect { cfg ->
+                trialDurationMs = cfg.trialDurationMs
+                recompute()
+            }
+        }
+
+        // Tick every 30s so TrialActive -> TrialExpired flips promptly
         scope.launch {
             while (isActive) {
                 delay(30_000)

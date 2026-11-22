@@ -374,7 +374,14 @@ fun TodayScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(5.dp))
-                            val progressColor = if (targetSummary.dailyGoalProgress >= 1f) Color(0xFF81C995) else Color(0xFF8AB4F8)
+                            // Same tiers as the earnings bubble (light tints for contrast on the blue card)
+                            val p = targetSummary.dailyGoalProgress
+                            val progressColor = when {
+                                p >= 1f -> Color(0xFF81C995)     // goal hit: green
+                                p >= 0.66f -> Color(0xFF8AB4F8)  // close: blue
+                                p >= 0.33f -> Color(0xFFFDD663)  // halfway: amber
+                                else -> Color(0xFFF28B82)        // behind: red
+                            }
                             LinearProgressIndicator(
                                 progress = { targetSummary.dailyGoalProgress.coerceIn(0f, 1f) },
                                 modifier = Modifier

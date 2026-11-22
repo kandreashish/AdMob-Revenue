@@ -73,19 +73,18 @@ fun BubblePromoHost(
     val promo by BubbleEntitlementManager.promo.collectAsState()
     val manualRequest by BubblePromo.manualRequest.collectAsState()
 
-    var rcConfig by remember { mutableStateOf(BubbleFirebase.config()) }
+    val liveConfig by BubbleFirebase.configState.collectAsState()
     val product by BubbleBillingManager.product.collectAsState()
     val purchaseInProgress by BubbleBillingManager.purchaseInProgress.collectAsState()
-    // Prefer Play's localised price over the Remote Config label
+    // Prefer Play's localised price over the config label
     val config = product?.oneTimePurchaseOfferDetails?.formattedPrice
-        ?.let { rcConfig.copy(priceLabel = it) } ?: rcConfig
+        ?.let { liveConfig.copy(priceLabel = it) } ?: liveConfig
     var showPromo by remember { mutableStateOf(false) }
     var autoShownThisSession by rememberSaveable { mutableStateOf(false) }
     var isWorking by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         BubbleFirebase.fetchRemoteConfig()
-        rcConfig = BubbleFirebase.config()
     }
 
     val overlayLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {

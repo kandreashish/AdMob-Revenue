@@ -31,6 +31,8 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -54,6 +56,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/** Brand red (#D93025) for the purchase call-to-action. */
+private val UnlockRed = Color(0xFFD93025)
 
 enum class PromoMode {
     /** First-time pitch: trial available. */
@@ -143,13 +148,20 @@ fun BubblePromoDialog(
                 }
                 if (billingAvailable) {
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = onBuy, enabled = !isWorking, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                    OutlinedButton(
+                        onClick = onBuy,
+                        enabled = !isWorking,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = UnlockRed),
+                        border = BorderStroke(1.dp, UnlockRed),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
                         Text("Unlock forever for ${config.priceLabel}")
                     }
                 }
             } else {
                 Button(
                     onClick = onBuy,
+                    colors = ButtonDefaults.buttonColors(containerColor = UnlockRed, contentColor = Color.White),
                     enabled = billingAvailable && !isWorking,
                     modifier = Modifier.fillMaxWidth().height(52.dp)
                 ) { Text("Unlock forever for ${config.priceLabel}", fontWeight = FontWeight.SemiBold) }

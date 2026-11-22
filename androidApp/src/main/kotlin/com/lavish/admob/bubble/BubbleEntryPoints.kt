@@ -53,11 +53,12 @@ fun BubbleTodayBanner() {
     val context = LocalContext.current
     val access by BubbleEntitlementManager.access.collectAsState()
     val price by BubbleBillingManager.product.collectAsState()
-    val priceLabel = price?.oneTimePurchaseOfferDetails?.formattedPrice ?: BubbleFirebase.config().priceLabel
+    val config by BubbleFirebase.configState.collectAsState()
+    val priceLabel = price?.oneTimePurchaseOfferDetails?.formattedPrice ?: config.priceLabel
     val enabled = EarningsBubbleService.isEnabled(context)
 
     val (title, body) = when (val a = access) {
-        BubbleAccess.NotStarted -> "New: earnings bubble" to "See today's earnings on top of any app. Try it free for ${BubbleFirebase.config().trialLabel}."
+        BubbleAccess.NotStarted -> "Earnings bubble" to "See today's earnings on top of any app. Try it free for ${config.trialLabel}."
         BubbleAccess.TrialExpired -> "Your bubble trial has ended" to "Unlock it forever for $priceLabel, one time."
         is BubbleAccess.TrialActive -> if (enabled) return else
             "Earnings bubble is off" to "Trial: ${remainingLabel(a.remainingMs)}. Tap to turn it on."
@@ -85,7 +86,13 @@ fun BubbleTodayBanner() {
             ) { Icon(Icons.Outlined.Layers, null, tint = Color.White, modifier = Modifier.size(22.dp)) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    if (access == BubbleAccess.NotStarted) {
+                        Spacer(Modifier.width(6.dp))
+                        NewBadge()
+                    }
+                }
                 Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = primary)
@@ -98,6 +105,7 @@ fun BubbleTodayBanner() {
 fun BubbleSettingsRow() {
     val context = LocalContext.current
     val access by BubbleEntitlementManager.access.collectAsState()
+    val config by BubbleFirebase.configState.collectAsState()
     var enabled by remember { mutableStateOf(EarningsBubbleService.isEnabled(context)) }
     LaunchedEffect(access) { enabled = EarningsBubbleService.isEnabled(context) }
 
@@ -105,7 +113,7 @@ fun BubbleSettingsRow() {
         BubbleAccess.Unlocked -> "Unlocked forever"
         is BubbleAccess.TrialActive -> "Free trial: ${remainingLabel(a.remainingMs)}"
         BubbleAccess.TrialExpired -> "Trial ended. Tap to unlock"
-        BubbleAccess.NotStarted -> "Try free for ${BubbleFirebase.config().trialLabel}"
+        BubbleAccess.NotStarted -> "Try free for ${config.trialLabel}"
         else -> "Sign in to use"
     }
 
@@ -117,7 +125,13 @@ fun BubbleSettingsRow() {
       Column(Modifier.padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Earnings bubble", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Earnings bubble", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    if (access == BubbleAccess.NotStarted) {
+                        Spacer(Modifier.width(6.dp))
+                        NewBadge()
+                    }
+                }
                 Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(
@@ -138,6 +152,24 @@ fun BubbleSettingsRow() {
             BubbleSizeSelector()
         }
       }
+    }
+}
+
+/** Small red "NEW" pill shown until the user has tried the feature. */
+@Composable
+private fun NewBadge() {
+    Box(
+        Modifier
+            .background(Color(0xFFD93025), RoundedCornerShape(999.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp)
+    ) {
+        Text(
+            "NEW",
+            color = Color.White,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp
+        )
     }
 }
 

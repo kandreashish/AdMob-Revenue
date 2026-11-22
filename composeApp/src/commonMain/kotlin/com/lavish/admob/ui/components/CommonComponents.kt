@@ -1,5 +1,6 @@
 package com.lavish.admob.ui.components
 
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -108,7 +109,16 @@ fun SolarHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            // Brand red accent underline under the screen title
+            Box(
+                modifier = Modifier
+                    .padding(top = 3.dp)
+                    .width(28.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(com.lavish.admob.theme.CoralCrimson)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -574,6 +584,20 @@ fun SolarBottomDock(
                             indication = null
                         ) { onTabSelected(tab) }
                         .animateContentSize(androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                        // Brand red accent: short underline on the selected tab
+                        .drawBehind {
+                            if (isSelected) {
+                                val w = size.width * 0.35f
+                                val y = size.height - 2.dp.toPx()
+                                drawLine(
+                                    color = com.lavish.admob.theme.CoralCrimson,
+                                    start = androidx.compose.ui.geometry.Offset((size.width - w) / 2f, y),
+                                    end = androidx.compose.ui.geometry.Offset((size.width + w) / 2f, y),
+                                    strokeWidth = 2.5.dp.toPx(),
+                                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                )
+                            }
+                        }
                         .padding(horizontal = hPad, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
