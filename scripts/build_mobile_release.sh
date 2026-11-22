@@ -32,6 +32,11 @@ echo "🍏 Building iOS Release Frameworks..."
 ./gradlew :composeApp:linkReleaseFrameworkIosSimulatorArm64
 ./gradlew :composeApp:linkReleaseFrameworkIosArm64
 
+if command -v xcodebuild >/dev/null; then
+  echo "🍏 Archiving iOS app..."
+  xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release -destination "generic/platform=iOS" -archivePath build/ios/AdDash.xcarchive archive
+fi
+
 echo ""
 echo "===================================================================="
 echo "✅ PRODUCTION RELEASE ARTIFACTS GENERATED SUCCESSFULLY!"

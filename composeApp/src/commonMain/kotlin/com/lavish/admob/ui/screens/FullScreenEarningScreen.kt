@@ -65,11 +65,15 @@ import com.lavish.admob.ui.utils.PlatformLandscapeEffect
 import com.lavish.admob.ui.utils.formatAmount
 import com.lavish.admob.ui.utils.formatCompactNumber
 import kotlinx.coroutines.delay
+import kotlinx.datetime.toLocalDateTime
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.runtime.produceState
 
 @Composable
 fun FullScreenEarningScreen(
     summary: AccountSummary,
     onExit: () -> Unit,
+    lastSyncMs: Long = 0L,
     modifier: Modifier = Modifier
 ) {
     // 1. Force landscape orientation & hide system bars for distraction-free mode
@@ -129,8 +133,9 @@ fun FullScreenEarningScreen(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                // Tapping only toggles exit button / controls visibility
-                showControls = !showControls
+                // While the "Tap screen to exit" hint is visible, a tap exits.
+                // Once it has faded, the first tap just brings the controls back.
+                if (showControls) onExit() else showControls = true
             }
     ) {
         // Center: Distraction-free earnings display
@@ -238,7 +243,8 @@ fun FullScreenEarningScreen(
         ) {
             Surface(
                 color = Color.Black.copy(alpha = 0.45f),
-                shape = RoundedCornerShape(999.dp)
+                shape = RoundedCornerShape(999.dp),
+                modifier = Modifier.clip(RoundedCornerShape(999.dp)).clickable { onExit() }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -261,6 +267,19 @@ fun FullScreenEarningScreen(
             }
         }
 
+        // Bottom-Left: current time (always visible, subtle)
+        HudClock(
+            color = textSecondaryColor,
+            modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 18.dp)
+        )
+
+        // Bottom-Right: last sync
+        HudLastSync(
+            lastSyncMs = lastSyncMs,
+            color = textSecondaryColor,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(horizontal = 24.dp, vertical = 18.dp)
+        )
+
         // Celebration Confetti Layer (Bursts on revenue changes)
         CelebrationConfetti(
             triggerKey = celebrationTrigger.takeIf { it > 0 },
@@ -269,6 +288,57 @@ fun FullScreenEarningScreen(
     }
 }
 
+
+private fun nowMs() = kotlin.time.Clock.System.now().toEpochMilliseconds()
+
+private fun formatClock(ms: Long): String {
+    val t = kotlin.time.Instant.fromEpochMilliseconds(ms)
+        .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+    val h12 = if (t.hour % 12 == 0) 12 else t.hour % 12
+    val ampm = if (t.hour < 12) "AM" else "PM"
+    return "$h12:${t.minute.toString().padStart(2, '0')} $ampm"
+}
+
+/** Ticks every second, isolated so only this text recomposes. */
+@Composable
+private fun HudClock(color: Color, modifier: Modifier = Modifier) {
+    val now by produceState(nowMs()) {
+        while (true) { delay(1000L - (nowMs() % 1000L)); value = nowMs() }
+    }
+    Text(
+        text = formatClock(now),
+        fontSize = 20.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = color,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun HudLastSync(lastSyncMs: Long, color: Color, modifier: Modifier = Modifier) {
+    val now by produceState(nowMs()) {
+        while (true) { delay(15_000L); value = nowMs() }
+    }
+    val text = if (lastSyncMs <= 0L) "Not synced yet" else {
+        val mins = ((now - lastSyncMs).coerceAtLeast(0L) / 60_000L).toInt()
+        val ago = when {
+            mins < 1 -> "just now"
+            mins < 60 -> "$mins min ago"
+            else -> "${mins / 60}h ${mins % 60}m ago"
+        }
+        "Synced $ago · ${formatClock(lastSyncMs)}"
+    }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Default.Sync,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(text = text, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = color)
+    }
+}
 
 @Composable
 private fun HudStat(label: String, value: String, labelColor: Color, valueColor: Color) {

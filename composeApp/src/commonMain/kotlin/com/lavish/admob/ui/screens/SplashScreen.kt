@@ -53,7 +53,7 @@ private val AdMobRedMid = Color(0xFFD93025)
 private val AdMobRedDark = Color(0xFF670503)
 
 private val GoldLight = Color(0xFFFEF7E0)
-private val GoldMid = Color(0xFF1A73E8)
+private val GoldMid = Color(0xFF3367D6)
 private val GoldDark = Color(0xFF185ABC)
 private val GoldText = Color(0xFF174EA6)
 

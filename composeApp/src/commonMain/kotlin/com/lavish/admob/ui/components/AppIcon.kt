@@ -42,7 +42,7 @@ import com.lavish.admob.theme.SolarTheme
 import kotlin.math.abs
 
 private val AppGradientPalettes = listOf(
-    listOf(Color(0xFF1A73E8), Color(0xFFD93025)), // Amber to Coral
+    listOf(Color(0xFF3367D6), Color(0xFFD93025)), // Amber to Coral
     listOf(Color(0xFF12B5CB), Color(0xFF185ABC)), // Azure to Deep Blue
     listOf(Color(0xFF1E8E3E), Color(0xFF137333)), // Emerald to Forest
     listOf(Color(0xFF9334E6), Color(0xFF4285F4)), // Violet to Indigo

@@ -29,6 +29,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -312,11 +318,38 @@ fun App(
 
             if (isFullScreenTodayVisible) Scoped {
                 val summary by repository.accountSummary.collectAsState()
+                val lastSyncMs by repository.lastRefreshTimestampMs.collectAsState()
                 FullScreenEarningScreen(
                     summary = summary,
+                    lastSyncMs = lastSyncMs,
                     onExit = {
                         tracker.trackModalDismissed("Full Screen Today Earnings HUD", dismissMethod = "exit_button")
                         isFullScreenTodayVisible = false
+                    }
+                )
+            } else if (showProfileDialog) Scoped {
+                // Profile & Settings screen (own composable: collects only what it shows)
+                ProfileSettingsDialog(
+                    repository = repository,
+                    session = session,
+                    showFullPublisherId = showFullPublisherId,
+                    onTogglePublisherId = { showFullPublisherId = !showFullPublisherId },
+                    onDismiss = { method ->
+                        tracker.trackModalDismissed("User Profile Modal", dismissMethod = method)
+                        showProfileDialog = false
+                    },
+                    onSignOut = {
+                        tracker.trackModalDismissed("User Profile Modal", dismissMethod = "sign_out_button")
+                        showProfileDialog = false
+                        tabBackStack.clear()
+                        tabBackStack.add(NavigationTab.TODAY)
+                        currentTabName = NavigationTab.TODAY.name
+                        repository.logout()
+                        onSignOutRequest?.invoke()
+                    },
+                    onEditGoal = {
+                        tracker.trackModalOpened("Set Daily Goal Modal", triggerSource = "profile_dialog_edit_goal")
+                        showProfileGoalDialog = true
                     }
                 )
             } else if (selectedAppForModal != null) Scoped {
@@ -590,33 +623,6 @@ fun App(
                 }
             }
 
-            // Profile & Settings Dialog (own composable: collects only what it shows)
-            if (showProfileDialog) {
-                ProfileSettingsDialog(
-                    repository = repository,
-                    session = session,
-                    showFullPublisherId = showFullPublisherId,
-                    onTogglePublisherId = { showFullPublisherId = !showFullPublisherId },
-                    onDismiss = { method ->
-                        tracker.trackModalDismissed("User Profile Modal", dismissMethod = method)
-                        showProfileDialog = false
-                    },
-                    onSignOut = {
-                        tracker.trackModalDismissed("User Profile Modal", dismissMethod = "sign_out_button")
-                        showProfileDialog = false
-                        tabBackStack.clear()
-                        tabBackStack.add(NavigationTab.TODAY)
-                        currentTabName = NavigationTab.TODAY.name
-                        repository.logout()
-                        onSignOutRequest?.invoke()
-                    },
-                    onEditGoal = {
-                        tracker.trackModalOpened("Set Daily Goal Modal", triggerSource = "profile_dialog_edit_goal")
-                        showProfileGoalDialog = true
-                    }
-                )
-            }
-
             if (showProfileGoalDialog) Scoped {
                 val summary by repository.accountSummary.collectAsState()
                 val selectedRange by repository.selectedTimeRange.collectAsState()
@@ -665,7 +671,7 @@ private fun ProfileSettingsDialog(
     val themeMode by repository.themeMode.collectAsState()
     val autoRefreshInterval by repository.autoRefreshInterval.collectAsState()
 
-        AlertDialog(
+        SettingsScreenScaffold(
             onDismissRequest = {
                 onDismiss("backdrop_click")
             },
@@ -872,6 +878,9 @@ private fun ProfileSettingsDialog(
                         }
                     }
 
+                    // Platform-specific settings (Android: Earnings Bubble)
+                    com.lavish.admob.platform.PlatformSlots.settingsRow?.invoke()
+
                     // Appearance / Theme Card
                     Surface(
                         color = SolarTheme.colors.surfaceVariant,
@@ -1074,7 +1083,62 @@ private fun ProfileSettingsDialog(
                     }
                 }
             },
-            containerColor = SolarTheme.colors.cardBackground,
-            shape = RoundedCornerShape(20.dp)
+            containerColor = SolarTheme.colors.cardBackground
         )
+}
+
+/**
+ * Full-screen settings page. Keeps the same slots the old AlertDialog used
+ * (title / text / confirm / dismiss) so the settings content didn't need to change.
+ */
+@Composable
+private fun SettingsScreenScaffold(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: @Composable () -> Unit,
+    title: @Composable () -> Unit,
+    text: @Composable () -> Unit,
+    containerColor: Color
+) {
+    Surface(color = containerColor, modifier = Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+        ) {
+            // Top bar: back + profile header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+            ) {
+                IconButton(onClick = onDismissRequest) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = SolarTheme.colors.textPrimary
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                title()
+            }
+            HorizontalDivider(color = SolarTheme.colors.borderSubtle)
+            // Scrollable settings content
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+            ) { text() }
+            HorizontalDivider(color = SolarTheme.colors.borderSubtle)
+            // Bottom actions
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                dismissButton()
+                confirmButton()
+            }
+        }
+    }
 }

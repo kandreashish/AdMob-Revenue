@@ -107,7 +107,7 @@ class AdMobRepository(
         }
         val legacy = settings?.getStringOrNull(key) ?: return emptyList()
         val decoded = try { json.decodeFromString<List<T>>(legacy) } catch (_: Exception) { emptyList() }
-        if (files.write(key, legacy)) settings?.remove(key)
+        if (files.write(key, legacy)) settings.remove(key)
         return decoded
     }
 

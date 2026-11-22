@@ -31,6 +31,14 @@ Deploy a new version to Google Play (draft release for draft apps)
 
 Deploy to Internal testing track
 
+### android closed
+
+```sh
+[bundle exec] fastlane android closed
+```
+
+Deploy to Closed testing track
+
 ### android validate
 
 ```sh

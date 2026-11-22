@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Color
 // ---------------------------------------------------------------------------
 
 // Primary — AdMob / Google Blue
-val SolarAmber = Color(0xFF1A73E8)          // Google Blue 600 (AdMob primary)
+val SolarAmber = Color(0xFF3367D6)          // Google Blue 600 (AdMob primary)
 val SolarAmberLight = Color(0xFFE8F0FE)     // Blue 50 (selected / container)
 val SolarAmberGlow = Color(0xFFF1F6FE)
 
@@ -71,7 +71,7 @@ val DarkCoralCrimson = Color(0xFFF28B82)
 val DarkCrimsonContainer = Color(0xFF4A1C19)
 
 // Ad format colors — AdMob report chart series
-val FormatRewarded = Color(0xFF1A73E8)     // Blue
+val FormatRewarded = Color(0xFF3367D6)     // Blue
 val FormatInterstitial = Color(0xFF12B5CB) // Cyan
 val FormatAppOpen = Color(0xFF9334E6)      // Purple
 val FormatNative = Color(0xFF1E8E3E)       // Green

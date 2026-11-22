@@ -17,6 +17,17 @@ if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
     fi
 fi
 
+# Load optional user or system environment variables for AdDash
+if [ -f "$HOME/.addash.env" ]; then
+    set -a
+    . "$HOME/.addash.env"
+    set +a
+elif [ -f "/etc/addash.env" ]; then
+    set -a
+    . "/etc/addash.env"
+    set +a
+fi
+
 if [ -z "$XAUTHORITY" ] && [ -f "$HOME/.Xauthority" ]; then
     export XAUTHORITY="$HOME/.Xauthority"
 fi

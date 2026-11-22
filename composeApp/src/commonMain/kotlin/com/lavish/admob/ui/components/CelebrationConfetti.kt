@@ -24,7 +24,7 @@ import kotlin.random.Random
 
 private val ConfettiColors = listOf(
     Color(0xFF1E8E3E), // Botanical Green
-    Color(0xFF1A73E8), // Solar Amber
+    Color(0xFF3367D6), // Solar Amber
     Color(0xFF12B5CB), // Ocean Azure
     Color(0xFFD93025), // Coral Red
     Color(0xFF9334E6), // Purple

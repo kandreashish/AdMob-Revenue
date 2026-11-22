@@ -113,4 +113,24 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.splashscreen)
     implementation("com.google.android.gms:play-services-auth:21.3.0")
+
+    // Compose (used directly by the Android-only Earnings Bubble UI)
+    implementation(libs.compose.runtime)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material.icons.core)
+    implementation(libs.compose.material.icons.extended)
+
+    // Firebase - Earnings Bubble (trial / entitlement / promo / analytics)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.database)
+    implementation(libs.firebase.config)
+    implementation(libs.firebase.analytics)
+    implementation(libs.kotlinx.coroutines.play.services)
+
+    // Google Play Billing - one-time $1 unlock
+    implementation(libs.play.billing)
+    implementation(libs.work.runtime.ktx) // trial-ending reminder
 }

@@ -30,6 +30,22 @@
           }
         },
         {
+          "client_id": "623789927018-ljji18a1p6dv8ihbotk0t7pl9t6krji4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lavish.admob",
+            "certificate_hash": "9bbf8085d5117ee3d7b8a99876a56146d03c3d22"
+          }
+        },
+        {
+          "client_id": "623789927018-lkajdv5228f2mluj3msegj8ngtj8qms1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lavish.admob",
+            "certificate_hash": "770851f593cdd718e0fc06d211816c3d1728fbeb"
+          }
+        },
+        {
           "client_id": "623789927018-ohs5oihm7r34fpobssro9k49v29076rh.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

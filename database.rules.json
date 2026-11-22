@@ -1,0 +1,21 @@
+{
+  "rules": {
+    "bubble": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        "trialStartedAt": {
+          ".write": "auth.uid === $uid && !data.exists()",
+          ".validate": "newData.val() === now"
+        },
+        "unlocked": {
+          ".write": "auth.uid === $uid && data.val() !== true",
+          ".validate": "newData.isBoolean() && newData.parent().child('purchase/token').exists()"
+        },
+        "purchase": {
+          ".write": "auth.uid === $uid && !data.exists()"
+        },
+        "promo": { ".write": "auth.uid === $uid" }
+      }
+    }
+  }
+}

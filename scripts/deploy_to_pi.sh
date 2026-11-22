@@ -13,21 +13,26 @@ echo ""
 
 # Ensure the distribution packages are built
 DIST_DIR="$ROOT_DIR/desktopApp/build/distributions"
-DEB_FILE="$DIST_DIR/addash_1.0.0_arm64.deb"
-TAR_FILE="$DIST_DIR/addash-1.0.0-raspberry-pi-arm64.tar.gz"
+DEB_FILE="$(ls -t "$DIST_DIR"/addash_*_arm64.deb 2>/dev/null | head -n 1 || echo "")"
+TAR_FILE="$(ls -t "$DIST_DIR"/addash-*-raspberry-pi-arm64.tar.gz 2>/dev/null | head -n 1 || echo "")"
 
-if [ ! -f "$DEB_FILE" ] || [ ! -f "$TAR_FILE" ]; then
+if [ -z "$DEB_FILE" ] || [ ! -f "$DEB_FILE" ]; then
     echo "📦 Building Raspberry Pi ARM64 distribution packages..."
     cd "$ROOT_DIR"
     ./gradlew :desktopApp:packageRaspberryPiDeb :desktopApp:packageRaspberryPiTar
+    DEB_FILE="$(ls -t "$DIST_DIR"/addash_*_arm64.deb | head -n 1)"
+    TAR_FILE="$(ls -t "$DIST_DIR"/addash-*-raspberry-pi-arm64.tar.gz | head -n 1)"
 fi
 
-echo "🚀 Transferring package to $PI_TARGET..."
+DEB_BASENAME="$(basename "$DEB_FILE")"
+
+echo "🚀 Transferring package ($DEB_BASENAME) to $PI_TARGET..."
 scp "$DEB_FILE" "$PI_TARGET:~/"
 
 echo "🔧 Installing AdDash and verifying Java on $PI_TARGET..."
-ssh -t "$PI_TARGET" bash -s << 'EOF'
+ssh -t "$PI_TARGET" bash -s "$DEB_BASENAME" << 'EOF'
     set -e
+    PKG_NAME="${1:-addash_2.0.0_arm64.deb}"
     echo "Checking Java 17+..."
     if ! command -v java >/dev/null 2>&1 || [ "$(java -version 2>&1 | awk -F '"' '/version/ {print $2}' | cut -d'.' -f1)" -lt 17 ]; then
         echo "Installing default-jre (Java 17+)..."
@@ -35,8 +40,8 @@ ssh -t "$PI_TARGET" bash -s << 'EOF'
         sudo apt install -y default-jre
     fi
 
-    echo "Installing AdDash debian package..."
-    sudo dpkg -i ~/addash_1.0.0_arm64.deb || sudo apt --fix-broken install -y
+    echo "Installing AdDash debian package ($PKG_NAME)..."
+    sudo dpkg -i ~/"$PKG_NAME" || sudo apt --fix-broken install -y
 
     if [ -d "$HOME/Desktop" ]; then
         cp -f /usr/share/applications/addash.desktop "$HOME/Desktop/AdDash.desktop"

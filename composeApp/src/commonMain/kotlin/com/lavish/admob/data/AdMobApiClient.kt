@@ -483,7 +483,7 @@ class AdMobApiClient(
         if (canIncrement) {
             val windowStart = today.minus(INCREMENTAL_DAYS - 1, DateTimeUnit.DAY)
             val windowStartKey = formatDateKey(windowStart)
-            val raw = if (cache!!.source == "mediation") {
+            val raw = if (cache.source == "mediation") {
                 fetchMediationReportRaw(accessToken, accountName,
                     windowStart.year, windowStart.month.number, windowStart.day,
                     today.year, today.month.number, today.day)

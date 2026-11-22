@@ -53,12 +53,15 @@ DEB_PATH=""
 if [ -n "$1" ] && [ -f "$1" ]; then
     DEB_PATH="$1"
     echo "📁 Using specified Debian package: $DEB_PATH"
-elif [ -f "desktopApp/build/distributions/addash_1.0.0_arm64.deb" ]; then
-    DEB_PATH="desktopApp/build/distributions/addash_1.0.0_arm64.deb"
+elif ls desktopApp/build/distributions/addash_*_arm64.deb 1>/dev/null 2>&1; then
+    DEB_PATH="$(ls -t desktopApp/build/distributions/addash_*_arm64.deb | head -n 1)"
     echo "📁 Using local repository build: $DEB_PATH"
 elif ls "$HOME"/addash_*_arm64.deb 1>/dev/null 2>&1; then
     DEB_PATH="$(ls -t "$HOME"/addash_*_arm64.deb | head -n 1)"
     echo "📁 Found Debian package in home directory: $DEB_PATH"
+elif ls addash_*_arm64.deb 1>/dev/null 2>&1; then
+    DEB_PATH="$(ls -t addash_*_arm64.deb | head -n 1)"
+    echo "📁 Found Debian package in current directory: $DEB_PATH"
 fi
 
 # B. Download latest release if no local package found

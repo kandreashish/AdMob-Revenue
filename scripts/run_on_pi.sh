@@ -63,7 +63,7 @@ if ! command -v java >/dev/null 2>&1; then
     sudo apt install default-jre -y
 fi
 
-DIST_TAR="$ROOT_DIR/desktopApp/build/distributions/addash-1.0.0-raspberry-pi-arm64.tar.gz"
+DIST_TAR="$(ls -t "$ROOT_DIR"/desktopApp/build/distributions/addash-*-raspberry-pi-arm64.tar.gz 2>/dev/null | head -n 1 || echo "$ROOT_DIR/desktopApp/build/distributions/addash-2.0.0-raspberry-pi-arm64.tar.gz")"
 
 COMMIT_FILE="$ROOT_DIR/desktopApp/build/.built_commit"
 CURRENT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo "unknown")"

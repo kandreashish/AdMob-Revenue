@@ -1,0 +1,14 @@
+// ---------------------------------------------------------------------------
+// AdDash iOS configuration
+// Fill in from Google Cloud Console > Credentials > OAuth client (type: iOS,
+// bundle id com.lavish.admob). The iOS client's plist has both values.
+// ---------------------------------------------------------------------------
+TEAM_ID = U7D25F24CQ
+PRODUCT_BUNDLE_IDENTIFIER = com.lavish.admob
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
+// e.g. 623789927018-xxxxxxxx.apps.googleusercontent.com
+GID_CLIENT_ID = REPLACE_ME.apps.googleusercontent.com
+// e.g. com.googleusercontent.apps.623789927018-xxxxxxxx
+GID_REVERSED_CLIENT_ID = com.googleusercontent.apps.REPLACE_ME

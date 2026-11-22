@@ -101,7 +101,9 @@ class DesktopGoogleAuthManager(
     fun getClientId(): String {
         return System.getenv("ADDASH_CLIENT_ID")
             ?.takeIf { it.isNotBlank() }
+            ?: System.getProperty("addash.client.id")?.takeIf { it.isNotBlank() }
             ?: repository.getCustomClientId()
+            ?: loadHomeEnvVar("ADDASH_CLIENT_ID")
             ?: DEFAULT_CLIENT_ID
     }
 
@@ -110,8 +112,26 @@ class DesktopGoogleAuthManager(
             ?.takeIf { it.isNotBlank() }
             ?: System.getProperty("addash.client.secret")?.takeIf { it.isNotBlank() }
             ?: repository.getCustomClientSecret()
+            ?: loadHomeEnvVar("ADDASH_CLIENT_SECRET")
             ?: loadLocalPropertiesSecret()
             ?: DEFAULT_CLIENT_SECRET
+    }
+
+    private fun loadHomeEnvVar(varName: String): String? {
+        return runCatching {
+            val homeEnv = File(System.getProperty("user.home"), ".addash.env")
+            val etcEnv = File("/etc/addash.env")
+            val target = when {
+                homeEnv.exists() -> homeEnv
+                etcEnv.exists() -> etcEnv
+                else -> null
+            }
+            target?.readLines()
+                ?.firstOrNull { it.trim().startsWith("$varName=") }
+                ?.substringAfter("$varName=")
+                ?.trim('"', '\'', ' ', '\t')
+                ?.takeIf { it.isNotBlank() }
+        }.getOrNull()
     }
 
     private fun loadLocalPropertiesSecret(): String? {

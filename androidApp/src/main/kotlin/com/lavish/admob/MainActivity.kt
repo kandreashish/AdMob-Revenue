@@ -9,6 +9,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.GoogleAuthUtil
@@ -19,7 +22,13 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.CommonStatusCodes
-import com.lavish.admob.App
+import com.lavish.admob.bubble.BubbleBillingManager
+import com.lavish.admob.bubble.BubbleEntitlementManager
+import com.lavish.admob.bubble.BubbleFirebase
+import com.lavish.admob.bubble.BubbleLocalPrefs
+import com.lavish.admob.bubble.BubblePromo
+import com.lavish.admob.bubble.BubblePromoHost
+import com.lavish.admob.bubble.EarningsBubbleService
 import com.lavish.admob.data.AdMobRepository
 import com.lavish.admob.data.initAndroidSettings
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +39,7 @@ import kotlinx.coroutines.withContext
  * Process-wide repository holder. Survives Activity recreation (locale/theme/config changes)
  * so we don't spin up a second repository + coroutine scope and leak the old Activity.
  */
-private object RepositoryHolder {
+internal object RepositoryHolder {
     @Volatile private var instance: AdMobRepository? = null
 
     fun get(context: android.content.Context): AdMobRepository =
@@ -139,6 +148,7 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this@MainActivity, "Signed in as $name", Toast.LENGTH_SHORT).show()
                     repository.loginWithOAuthToken(name, email, token, photoUrl)
                 }
+                BubbleFirebase.linkGoogleAccount(account)
             } catch (e: UserRecoverableAuthException) {
                 Log.w(TAG, "Consent required, launching user consent...", e)
                 pendingAccount = account
@@ -184,6 +194,14 @@ class MainActivity : ComponentActivity() {
 
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
+        // Earnings Bubble (Android only): entitlement listener + app-open counter
+        BubbleEntitlementManager.start(applicationContext)
+        BubbleBillingManager.init(applicationContext)
+        com.lavish.admob.platform.PlatformSlots.todayBanner = { com.lavish.admob.bubble.BubbleTodayBanner() }
+        com.lavish.admob.platform.PlatformSlots.settingsRow = { com.lavish.admob.bubble.BubbleSettingsRow() }
+        if (savedInstanceState == null) BubbleLocalPrefs.incrementAppOpens(applicationContext)
+        handleBubbleIntent(intent)
+
         // If user is already signed in on device, sync photo and silently renew token on startup
         val lastAccount = GoogleSignIn.getLastSignedInAccount(this)
         if (lastAccount != null && savedInstanceState == null) {
@@ -191,6 +209,7 @@ class MainActivity : ComponentActivity() {
             if (!photoUrl.isNullOrBlank()) {
                 repository.updateAvatarUrl(photoUrl)
             }
+            lifecycleScope.launch { BubbleFirebase.linkGoogleAccount(lastAccount) }
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     val freshToken = renewAdMobToken(applicationContext, repository, lastAccount)
@@ -206,6 +225,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+          val bubbleProduct by BubbleBillingManager.product.collectAsState()
+          Box {
             App(
                 repository = repository,
                 onGoogleSignInRequest = {
@@ -220,7 +241,7 @@ class MainActivity : ComponentActivity() {
                             signInLauncher.launch(googleSignInClient.signInIntent)
                         } catch (e2: Exception) {
                             val errorMsg = "Could not launch Google Sign-In: ${e2.localizedMessage}"
-                            Toast.makeText(this, errorMsg, Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, errorMsg, Toast.LENGTH_SHORT).show()
                             repository.setAuthError(errorMsg)
                         }
                     }
@@ -230,9 +251,48 @@ class MainActivity : ComponentActivity() {
                         googleSignInClient.signOut()
                     } catch (_: Exception) {
                     }
+                    EarningsBubbleService.stop(this@MainActivity)
+                    BubbleFirebase.signOut()
                     repository.logout()
                 }
             )
+            BubblePromoHost(
+                repository = repository,
+                billingAvailable = bubbleProduct != null,
+                onBuyRequest = { BubbleBillingManager.launchPurchase(this@MainActivity) },
+                onBubbleReady = { EarningsBubbleService.start(this@MainActivity) }
+            )
+          }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        EarningsBubbleService.appInForeground.value = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        EarningsBubbleService.appInForeground.value = false
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Picks up purchases completed outside the app (pending payments, other devices)
+        BubbleBillingManager.restorePurchases()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleBubbleIntent(intent)
+    }
+
+    /** Tapping a locked bubble opens the app with the unlock promo. */
+    private fun handleBubbleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EarningsBubbleService.EXTRA_OPEN_PROMO, false) == true) {
+            intent.removeExtra(EarningsBubbleService.EXTRA_OPEN_PROMO)
+            BubblePromo.open()
         }
     }
 }

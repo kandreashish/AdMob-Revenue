@@ -1,6 +1,7 @@
 package com.lavish.admob.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import com.lavish.admob.platform.PlatformSlots
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -33,7 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
 import androidx.compose.material.icons.filled.RemoveRedEye
@@ -180,6 +181,9 @@ fun TodayScreen(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
+        // Platform-specific banner (Android: Earnings Bubble)
+        PlatformSlots.todayBanner?.let { banner -> item { banner() } }
+
         // Hero Sunlit Revenue Card
         item {
             AnimatedContent(
@@ -283,10 +287,10 @@ fun TodayScreen(
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
-                                                imageVector = Icons.Default.Fullscreen,
+                                                imageVector = Icons.Rounded.OpenInFull,
                                                 contentDescription = "Full Screen Landscape Mode",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(15.dp)
                                             )
                                         }
                                     }
