@@ -37,7 +37,7 @@ Deploy to Internal testing track
 [bundle exec] fastlane android closed
 ```
 
-Promote or deploy to Closed testing track
+Deploy a new version to Closed testing track
 
 ### android validate
 

@@ -28,13 +28,13 @@ platform :android do
     )
   end
 
-  desc "Promote or deploy to Closed testing track"
+  desc "Deploy a new version to Closed testing track"
   lane :closed do |options|
+    status = options[:status] || "completed"
     upload_to_play_store(
-      track: "production",
-      track_promote_to: options[:track] || "alpha",
-      track_promote_release_status: options[:status] || "draft",
-      skip_upload_aab: true,
+      track: options[:track] || "alpha",
+      aab: File.expand_path("../build/outputs/bundle/release/androidApp-release.aab", __dir__),
+      release_status: status,
       skip_upload_apk: true,
       skip_upload_metadata: true,
       skip_upload_images: true,
