@@ -211,18 +211,8 @@ class EarningsBubbleService : Service() {
     private fun observeData() {
         val repo = RepositoryHolder.get(applicationContext)
 
-        // Hide while the app is open, show again when it goes to the background.
-        scope.launch {
-            var wasPreviewing = false
-            combine(appInForeground, BubbleSizePref.previewDp) { fg, preview -> fg to (preview != null) }
-                .collect { (fg, previewing) ->
-                    val visible = !fg || previewing
-                    // Slider just released inside the app: let the user see the result, then fade out over 3s
-                    val fade = !visible && wasPreviewing
-                    wasPreviewing = previewing
-                    setBubbleVisible(visible, fadeOutMs = if (fade) 3000L else 0L)
-                }
-        }
+        // Bubble stays visible at all times, including while the app is open.
+        setBubbleVisible(true)
 
         // Live-resize when the user changes the size in Settings.
         scope.launch {

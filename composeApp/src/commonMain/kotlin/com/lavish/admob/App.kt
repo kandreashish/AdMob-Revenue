@@ -389,7 +389,7 @@ fun App(
 
                     IosPullToRefreshBox(
                         isRefreshing = isRefreshing,
-                        onRefresh = { repository.refreshRealData(); if (currentTab == NavigationTab.REPORTS) repository.loadHourly(true) },
+                        onRefresh = { repository.refreshRealData() },
                         modifier = Modifier.fillMaxSize()
                     ) {
                         AnimatedContent(

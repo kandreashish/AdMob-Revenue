@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BatterySaver
+import androidx.compose.material.icons.outlined.CardGiftcard
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
@@ -49,11 +50,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -189,43 +185,22 @@ fun BubblePromoDialog(
     }
 }
 
-/** Collapsed "Have a promo code?" link that expands into an 8-digit code field. */
+/** "Have a promo code?" link that opens the premium OTP-style redeem dialog. */
 @Composable
 private fun PromoCodeSection(isWorking: Boolean, error: String?, onRedeem: (String) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    var code by rememberSaveable { mutableStateOf("") }
-    if (!expanded) {
-        TextButton(onClick = { expanded = true }) { Text("Have a promo code?") }
-        return
+    var open by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { open = true }) {
+        Icon(Icons.Outlined.CardGiftcard, null, Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Have a promo code?", fontWeight = FontWeight.Medium)
     }
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
-                value = code,
-                onValueChange = { v -> code = v.filter { it.isDigit() }.take(8) },
-                label = { Text("8-digit promo code") },
-                singleLine = true,
-                isError = error != null,
-                enabled = !isWorking,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (code.length == 8) onRedeem(code) }),
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = { onRedeem(code) },
-                enabled = code.length == 8 && !isWorking,
-                modifier = Modifier.height(56.dp).padding(top = 6.dp)
-            ) { Text("Apply") }
-        }
-        if (error != null) {
-            Text(
-                error,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
-            )
-        }
+    if (open) {
+        PromoCodeDialog(
+            isWorking = isWorking,
+            error = error,
+            onRedeem = onRedeem,
+            onDismiss = { open = false }
+        )
     }
 }
 

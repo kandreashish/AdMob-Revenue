@@ -288,12 +288,6 @@ fun ReportsScreen(
             Spacer(Modifier.height(12.dp))
         }
 
-        // Hourly earnings (alpha AdMob API — shows a notice instead if Google refuses it)
-        item {
-            HourlyCard(hourly = hourly, currencySymbol = currencySymbol, onLoad = onLoadHourly)
-            Spacer(Modifier.height(12.dp))
-        }
-
         // Chart (skipped when there's only one data point — the scorecard already shows it)
         if (ready && chartSeries.size > 1) item {
             Card {

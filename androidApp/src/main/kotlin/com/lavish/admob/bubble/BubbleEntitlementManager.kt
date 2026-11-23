@@ -188,15 +188,22 @@ object BubbleEntitlementManager {
         scope.launch {
             val snap = withTimeoutOrNull(8_000) { runCatching { ref.get().await() }.getOrNull() }
             if (uid != newUid) return@launch
-            if (snap != null) apply(snap)
+            if (snap != null) {
+                apply(snap)
+                // Server is the truth for `unlocked`: clears a stale local flag (e.g. from a
+                // rejected optimistic write). Play ownership is tracked separately via ownedOnPlay.
+                if (snap.child("unlocked").getValue(Boolean::class.java) != true && !ownedOnPlay) {
+                    unlocked = false
+                    saveLocal { remove(k("unlocked")) }
+                }
+            }
             confirmed = true
             recompute()
         }
     }
 
     /** Merge a snapshot with the local mirror. Server values only ever ADD state, never remove it. */
-    private fun apply(s: DataSnapshot) {
-        s.child("trialStartedAt").getValue(Long::class.java)?.let { server ->
+    private fun apply(s: DataSnapshot) {        s.child("trialStartedAt").getValue(Long::class.java)?.let { server ->
             trialStartedAt = server
             saveLocal { putLong(k("trialStartedAt"), server) }
         }
@@ -321,14 +328,25 @@ object BubbleEntitlementManager {
         if (unlocked || ownedOnPlay) return RedeemResult.Success
         if (System.currentTimeMillis() < redeemLockedUntil) return RedeemResult.TooManyAttempts
 
-        val updates = mapOf<String, Any>(
+        // Step 1: claim the code. Deliberately does NOT touch `unlocked`: RTDB applies writes
+        // locally before the server answers, so an optimistic unlocked=true would leak into the
+        // UI / local mirror even when the server rejects the code.
+        val claim = mapOf<String, Any>(
             "promoCodes/$code/redeemedBy" to u,
             "promoCodes/$code/redeemedAt" to ServerValue.TIMESTAMP,
-            "bubble/$u/promoCode" to code,
-            "bubble/$u/unlocked" to true
+            "bubble/$u/promoCode" to code
         )
         return try {
-            db.reference.updateChildren(updates).await()
+            // Resume a half-finished redemption: if this account already claimed a code on the
+            // server (step 1 ok, step 2 failed), skip the claim and just unlock. Otherwise the
+            // write-once promoCode rule makes EVERY new code look "already used".
+            val claimed = withTimeoutOrNull(8_000) {
+                ref.child("promoCode").get().await().getValue(String::class.java)
+            }
+            if (claimed == null) db.reference.updateChildren(claim).await()
+            else Log.i(TAG, "Account already claimed code $claimed; finishing unlock")
+            // Step 2: server accepted the claim, now unlock (rules verify the claim).
+            ref.child("unlocked").setValue(true).await()
             failedRedeems = 0
             unlocked = true
             saveLocal { putBoolean(k("unlocked"), true) }
@@ -336,21 +354,14 @@ object BubbleEntitlementManager {
             recompute()
             RedeemResult.Success
         } catch (e: Exception) {
-            Log.w(TAG, "redeemPromoCode failed: ${e.message}")
+            Log.w(TAG, "redeemPromoCode failed for code=$code uid=$u: ${e.message}", e)
             val denied = e.message?.contains("permission", ignoreCase = true) == true
             if (!denied) return RedeemResult.Failed(e.message)
             // Slow down guessing: lock for 1 min after 5 wrong codes, doubling after that.
             if (++failedRedeems >= 5) {
                 redeemLockedUntil = System.currentTimeMillis() + 60_000L * (1L shl (failedRedeems - 5).coerceAtMost(6))
             }
-            // Same account may have already redeemed (e.g. on another device): re-check.
-            val already = runCatching { ref.child("unlocked").get().await().getValue(Boolean::class.java) }.getOrNull()
-            if (already == true) {
-                unlocked = true
-                saveLocal { putBoolean(k("unlocked"), true) }
-                recompute()
-                RedeemResult.Success
-            } else RedeemResult.Rejected
+            RedeemResult.Rejected
         }
     }
 
