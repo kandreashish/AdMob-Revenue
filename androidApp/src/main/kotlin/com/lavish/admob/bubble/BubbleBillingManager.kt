@@ -88,7 +88,16 @@ object BubbleBillingManager : PurchasesUpdatedListener {
         client?.queryProductDetailsAsync(params) { result, details ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                 _product.value = details.productDetailsList.firstOrNull()
-                if (_product.value == null) Log.w(TAG, "Product $PRODUCT_ID not found in Play Console")
+                if (_product.value == null) {
+                    // Billing 8 tells us WHY a product wasn't returned
+                    // (e.g. PRODUCT_NOT_FOUND, NO_ELIGIBLE_OFFER)
+                    val reasons = details.unfetchedProductList.joinToString {
+                        "${it.productId}: statusCode=${it.statusCode}"
+                    }
+                    Log.w(TAG, "Product $PRODUCT_ID not returned for package ${appContext.packageName}. Unfetched: [$reasons]")
+                } else {
+                    Log.d(TAG, "Loaded product $PRODUCT_ID: ${_product.value?.oneTimePurchaseOfferDetails?.formattedPrice}")
+                }
             } else {
                 Log.w(TAG, "queryProductDetails failed: ${result.debugMessage}")
             }

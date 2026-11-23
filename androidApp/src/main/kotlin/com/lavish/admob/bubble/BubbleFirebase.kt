@@ -30,6 +30,14 @@ object BubbleFirebase {
     private val db get() = FirebaseDatabase.getInstance()
 
     private val _configState = MutableStateFlow(BubbleConfig())
+
+    /** True once /config has actually been read from the server (or restored from the last good copy). */
+    private val _configLoaded = MutableStateFlow(false)
+    val configLoaded: StateFlow<Boolean> = _configLoaded.asStateFlow()
+
+    private const val CFG_PREFS = "earnings_bubble_config"
+    private var cfgPrefs: android.content.SharedPreferences? = null
+    private var configListener: ValueEventListener? = null
     val configState: StateFlow<BubbleConfig> = _configState.asStateFlow()
 
     fun config(): BubbleConfig = _configState.value
@@ -41,14 +49,34 @@ object BubbleFirebase {
      * Admin can modify `trialHours`, `trialMinutes`, etc. in Firebase Console,
      * protected by Realtime Database rules (.write: false for regular clients).
      */
-    fun startListeningConfig() {
+    fun startListeningConfig(context: Context? = null) {
+        if (context != null && cfgPrefs == null) {
+            cfgPrefs = context.applicationContext.getSharedPreferences(CFG_PREFS, Context.MODE_PRIVATE)
+            restoreCachedConfig()
+        }
         if (listeningConfig) return
         listeningConfig = true
 
-        db.getReference("config").addValueEventListener(object : ValueEventListener {
+        // /config needs auth (rules: auth != null). Attach only when signed in and re-attach on
+        // every sign-in: a denied listener is cancelled by RTDB for good and never retries.
+        auth.addAuthStateListener { a ->
+            if (a.currentUser != null) attachConfigListener() else detachConfigListener()
+        }
+    }
+
+    private fun detachConfigListener() {
+        configListener?.let { db.getReference("config").removeEventListener(it) }
+        configListener = null
+    }
+
+    private fun attachConfigListener() {
+        detachConfigListener()
+        val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val hours = snapshot.child("trialHours").getValue(Long::class.java)
-                val minutes = snapshot.child("trialMinutes").getValue(Long::class.java)
+                // Accept numbers stored as either numbers or strings in the console
+                fun num(key: String): Long? = snapshot.child(key).value?.toString()?.trim()?.toDoubleOrNull()?.toLong()
+                val hours = num("trialHours")
+                val minutes = num("trialMinutes")
                 val price = snapshot.child("priceLabel").getValue(String::class.java)
                 val promoEnabled = snapshot.child("promoEnabled").getValue(Boolean::class.java)
 
@@ -64,12 +92,31 @@ object BubbleFirebase {
                 _configState.value = updated.copy(
                     promoCta = "Start free ${updated.trialLabel} trial"
                 )
+                _configLoaded.value = true
+                cfgPrefs?.edit()
+                    ?.putLong("trialHours", updatedHours)
+                    ?.putLong("trialMinutes", updatedMinutes ?: -1L)
+                    ?.apply()
+                Log.d(TAG, "Loaded /config: trialHours=$updatedHours trialMinutes=$updatedMinutes")
             }
 
             override fun onCancelled(error: DatabaseError) {
                 Log.w(TAG, "RTDB /config read failed: ${error.message}")
+                configListener = null // allow the next auth change to re-attach
             }
-        })
+        }
+        configListener = listener
+        db.getReference("config").addValueEventListener(listener)
+    }
+
+    /** Use the last config we got from the server until a fresh one arrives (offline / cold start). */
+    private fun restoreCachedConfig() {
+        val p = cfgPrefs ?: return
+        if (!p.contains("trialHours")) return
+        val minutes = p.getLong("trialMinutes", -1L).takeIf { it > 0 }
+        val updated = _configState.value.copy(trialHours = p.getLong("trialHours", 24L), trialMinutes = minutes)
+        _configState.value = updated.copy(promoCta = "Start free ${updated.trialLabel} trial")
+        _configLoaded.value = true
     }
 
     /** Links the existing Google Sign-In account to Firebase Auth so we get a stable uid. */
@@ -107,7 +154,7 @@ object BubbleFirebase {
 
     private val defaults: Map<String, Any> = mapOf(
         Keys.FEATURE_ENABLED to true,
-        Keys.TRIAL_HOURS to 72L,
+        Keys.TRIAL_HOURS to 24L,
         Keys.PRICE_LABEL to "$1",
         Keys.PROMO_ENABLED to true,
         Keys.PROMO_MIN_APP_OPENS to 2L,
@@ -165,7 +212,7 @@ object BubbleFirebase {
 
 data class BubbleConfig(
     val featureEnabled: Boolean = true,
-    val trialHours: Long = 72,
+    val trialHours: Long = 24,
     val trialMinutes: Long? = null,
     val priceLabel: String = "$1",
     val promoEnabled: Boolean = true,

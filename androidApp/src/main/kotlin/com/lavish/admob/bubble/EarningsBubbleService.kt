@@ -69,6 +69,7 @@ class EarningsBubbleService : Service() {
         fun start(context: Context) {
             if (!Settings.canDrawOverlays(context)) return
             context.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, true).apply()
+            _enabled.value = true // UI (banner / switch) updates instantly
             BubbleEntitlementManager.markPromoCompleted()
             androidx.core.content.ContextCompat.startForegroundService(
                 context, Intent(context, EarningsBubbleService::class.java)
@@ -77,6 +78,7 @@ class EarningsBubbleService : Service() {
 
         fun stop(context: Context) {
             context.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, false).apply()
+            _enabled.value = false
             context.stopService(Intent(context, EarningsBubbleService::class.java))
         }
 
@@ -88,6 +90,14 @@ class EarningsBubbleService : Service() {
 
         fun isEnabled(context: Context): Boolean =
             context.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_ENABLED, false)
+
+        private val _enabled = kotlinx.coroutines.flow.MutableStateFlow<Boolean?>(null)
+
+        /** Observable on/off state so Compose UI reacts the moment the bubble is started or stopped. */
+        fun enabledFlow(context: Context): kotlinx.coroutines.flow.StateFlow<Boolean?> {
+            if (_enabled.value == null) _enabled.value = isEnabled(context)
+            return _enabled
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

@@ -55,7 +55,8 @@ fun BubbleTodayBanner() {
     val price by BubbleBillingManager.product.collectAsState()
     val config by BubbleFirebase.configState.collectAsState()
     val priceLabel = price?.oneTimePurchaseOfferDetails?.formattedPrice ?: config.priceLabel
-    val enabled = EarningsBubbleService.isEnabled(context)
+    // Reactive: hides the "bubble is off" card the instant the bubble starts
+    val enabled = EarningsBubbleService.enabledFlow(context).collectAsState().value == true
 
     val (title, body) = when (val a = access) {
         BubbleAccess.NotStarted -> "Earnings bubble" to "See today's earnings on top of any app. Try it free for ${config.trialLabel}."
@@ -106,8 +107,7 @@ fun BubbleSettingsRow() {
     val context = LocalContext.current
     val access by BubbleEntitlementManager.access.collectAsState()
     val config by BubbleFirebase.configState.collectAsState()
-    var enabled by remember { mutableStateOf(EarningsBubbleService.isEnabled(context)) }
-    LaunchedEffect(access) { enabled = EarningsBubbleService.isEnabled(context) }
+    val enabled = EarningsBubbleService.enabledFlow(context).collectAsState().value == true
 
     val status = when (val a = access) {
         BubbleAccess.Unlocked -> "Unlocked forever"
@@ -139,10 +139,8 @@ fun BubbleSettingsRow() {
                 onCheckedChange = { on ->
                     if (on) {
                         BubblePromo.open() // starts it, or shows promo if locked
-                        enabled = access.canUseBubble
                     } else {
                         EarningsBubbleService.stop(context)
-                        enabled = false
                     }
                 }
             )

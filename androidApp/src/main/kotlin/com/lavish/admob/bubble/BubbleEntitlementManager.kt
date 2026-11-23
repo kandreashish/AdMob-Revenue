@@ -97,7 +97,7 @@ object BubbleEntitlementManager {
         if (started) return
         started = true
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        BubbleFirebase.startListeningConfig()
+        BubbleFirebase.startListeningConfig(context)
         trialDurationMs = BubbleFirebase.config().trialDurationMs
 
         db.getReference(".info/serverTimeOffset")
@@ -116,10 +116,11 @@ object BubbleEntitlementManager {
 
         // React immediately whenever trial duration is changed by admin in Firebase RTDB
         scope.launch {
-            BubbleFirebase.configState.collect { cfg ->
-                trialDurationMs = cfg.trialDurationMs
-                recompute()
-            }
+            kotlinx.coroutines.flow.combine(BubbleFirebase.configState, BubbleFirebase.configLoaded) { cfg, _ -> cfg }
+                .collect { cfg ->
+                    trialDurationMs = cfg.trialDurationMs
+                    recompute()
+                }
         }
 
         // Tick every 30s so TrialActive -> TrialExpired flips promptly
@@ -217,6 +218,8 @@ object BubbleEntitlementManager {
         val start = trialStartedAt
         _access.value = when {
             unlocked || ownedOnPlay -> BubbleAccess.Unlocked
+            // Don't compute remaining time from the built-in default; wait for the real trial length.
+            start != null && !BubbleFirebase.configLoaded.value -> BubbleAccess.Loading
             start != null -> {
                 val endsAt = start + trialDurationMs
                 val remaining = endsAt - serverNow()
