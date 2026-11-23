@@ -29,6 +29,7 @@ import com.lavish.admob.bubble.BubbleLocalPrefs
 import com.lavish.admob.bubble.BubblePromo
 import com.lavish.admob.bubble.BubblePromoHost
 import com.lavish.admob.bubble.EarningsBubbleService
+import com.lavish.admob.crashlytics.AdCrashlytics
 import com.lavish.admob.data.AdMobRepository
 import com.lavish.admob.data.initAndroidSettings
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,7 @@ internal object RepositoryHolder {
                                 GoogleSignIn.getLastSignedInAccount(app)?.let { renewAdMobToken(app, repo, it) }
                             } catch (e: Exception) {
                                 Log.w("AdCashAuth", "Automatic token renewal failed: ${e.message}")
+                                AdCrashlytics.recordException(e)
                                 null
                             }
                         }
@@ -148,9 +150,11 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this@MainActivity, "Signed in as $name", Toast.LENGTH_SHORT).show()
                     repository.loginWithOAuthToken(name, email, token, photoUrl)
                 }
+                AdCrashlytics.setUserId(email)
                 BubbleFirebase.linkGoogleAccount(account)
             } catch (e: UserRecoverableAuthException) {
                 Log.w(TAG, "Consent required, launching user consent...", e)
+                AdCrashlytics.recordException(e)
                 pendingAccount = account
                 withContext(Dispatchers.Main) {
                     val intent = e.intent
@@ -164,6 +168,7 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "AdMob token acquisition error: ${e.message}", e)
+                AdCrashlytics.recordException(e)
                 withContext(Dispatchers.Main) {
                     val errorMsg = "Could not acquire AdMob authorization token: ${e.localizedMessage ?: e.message}. Please verify your Google account has AdMob access."
                     Toast.makeText(this@MainActivity, errorMsg, Toast.LENGTH_LONG).show()
@@ -178,6 +183,17 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val pInfo = packageManager.getPackageInfo(packageName, 0)
+        val vName = pInfo.versionName ?: "unknown"
+        val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            pInfo.longVersionCode.toInt()
+        } else {
+            @Suppress("DEPRECATION")
+            pInfo.versionCode
+        }
+        val isDebug = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        AdCrashlytics.init(vName, vCode, isDebug)
 
         // Reuse the process-wide repository (token refresher is wired there with applicationContext)
         repository = RepositoryHolder.get(this)
@@ -205,6 +221,7 @@ class MainActivity : ComponentActivity() {
         // If user is already signed in on device, sync photo and silently renew token on startup
         val lastAccount = GoogleSignIn.getLastSignedInAccount(this)
         if (lastAccount != null && savedInstanceState == null) {
+            AdCrashlytics.setUserId(lastAccount.email)
             val photoUrl = lastAccount.photoUrl?.toString()
             if (!photoUrl.isNullOrBlank()) {
                 repository.updateAvatarUrl(photoUrl)
@@ -253,6 +270,7 @@ class MainActivity : ComponentActivity() {
                     }
                     EarningsBubbleService.stop(this@MainActivity)
                     BubbleFirebase.signOut()
+                    AdCrashlytics.clearUserId()
                     repository.logout()
                 }
             )

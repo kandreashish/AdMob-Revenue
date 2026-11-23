@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.googleServices)
+    alias(libs.plugins.crashlytics)
 }
 
 val localProperties = Properties().apply {
@@ -128,6 +129,7 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.config)
     implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
     implementation(libs.kotlinx.coroutines.play.services)
 
     // Google Play Billing - one-time $1 unlock
