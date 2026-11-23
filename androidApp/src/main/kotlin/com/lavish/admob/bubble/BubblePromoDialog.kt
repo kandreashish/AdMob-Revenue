@@ -46,6 +46,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -82,7 +90,9 @@ fun BubblePromoDialog(
     onStartTrial: () -> Unit,
     onBuy: () -> Unit,
     onLater: () -> Unit,
-    onNeverShow: () -> Unit
+    onNeverShow: () -> Unit,
+    promoCodeError: String? = null,
+    onRedeemCode: (String) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onLater, sheetState = sheetState) {
@@ -168,11 +178,53 @@ fun BubblePromoDialog(
             }
 
             Spacer(Modifier.height(4.dp))
+            PromoCodeSection(isWorking = isWorking, error = promoCodeError, onRedeem = onRedeemCode)
+
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onNeverShow) { Text("Don't show again") }
                 TextButton(onClick = onLater) { Text("Maybe later") }
             }
             Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+/** Collapsed "Have a promo code?" link that expands into an 8-digit code field. */
+@Composable
+private fun PromoCodeSection(isWorking: Boolean, error: String?, onRedeem: (String) -> Unit) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var code by rememberSaveable { mutableStateOf("") }
+    if (!expanded) {
+        TextButton(onClick = { expanded = true }) { Text("Have a promo code?") }
+        return
+    }
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = code,
+                onValueChange = { v -> code = v.filter { it.isDigit() }.take(8) },
+                label = { Text("8-digit promo code") },
+                singleLine = true,
+                isError = error != null,
+                enabled = !isWorking,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (code.length == 8) onRedeem(code) }),
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Button(
+                onClick = { onRedeem(code) },
+                enabled = code.length == 8 && !isWorking,
+                modifier = Modifier.height(56.dp).padding(top = 6.dp)
+            ) { Text("Apply") }
+        }
+        if (error != null) {
+            Text(
+                error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+            )
         }
     }
 }

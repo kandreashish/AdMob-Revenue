@@ -4,6 +4,19 @@
       ".read": "auth != null",
       ".write": false
     },
+    "promoCodes": {
+      ".read": false,
+      "$code": {
+        "redeemedBy": {
+          ".write": "auth != null && !data.exists() && root.child('promoCodes').child($code).child('active').val() === true",
+          ".validate": "newData.val() === auth.uid && newData.parent().parent().parent().child('bubble').child(auth.uid).child('promoCode').val() === $code"
+        },
+        "redeemedAt": {
+          ".write": "auth != null && !data.exists() && root.child('promoCodes').child($code).child('active').val() === true",
+          ".validate": "newData.val() === now && newData.parent().child('redeemedBy').val() === auth.uid"
+        }
+      }
+    },
     "bubble": {
       "$uid": {
         ".read": "auth.uid === $uid",
@@ -13,10 +26,14 @@
         },
         "unlocked": {
           ".write": "auth.uid === $uid && data.val() !== true",
-          ".validate": "newData.isBoolean() && newData.parent().child('purchase/token').exists()"
+          ".validate": "newData.isBoolean() && (newData.parent().child('purchase/token').exists() || (newData.parent().child('promoCode').exists() && newData.parent().parent().parent().child('promoCodes').child(newData.parent().child('promoCode').val()).child('redeemedBy').val() === $uid))"
         },
         "purchase": {
           ".write": "auth.uid === $uid && !data.exists()"
+        },
+        "promoCode": {
+          ".write": "auth.uid === $uid && !data.exists()",
+          ".validate": "newData.isString() && newData.val().matches(/^[0-9]{8}$/) && newData.parent().parent().parent().child('promoCodes').child(newData.val()).child('redeemedBy').val() === $uid"
         },
         "promo": { ".write": "auth.uid === $uid" }
       }

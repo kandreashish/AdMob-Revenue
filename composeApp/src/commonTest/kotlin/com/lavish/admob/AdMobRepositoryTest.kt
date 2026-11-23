@@ -607,10 +607,18 @@ class AdMobRepositoryTest {
             publisherId = "pub-test",
             today = testDate
         )
-        // Auto goal calculated from 7 completed days: 700 / 7 = 100 avg -> (100 * 1.25 / 50).round * 50 = 150.0
-        assertEquals(150.0, summary.dailyGoal)
-        assertEquals(150.0, summary.periodGoal)
+        // Auto goal = 7 completed days / 7 = 700 / 7 = 100.0
+        assertEquals(100.0, summary.dailyGoal)
+        assertEquals(100.0, summary.periodGoal)
         assertFalse(summary.isCustomGoal)
+    }
+
+    @Test
+    fun testAutoGoalIsWeeklyEarningsOverSevenRoundedUp() {
+        val rows = listOf(AdMobReportRow("20261118", "app1", "App", "Banner", "US", 10.0, 1000, 10))
+        val summary = AdMobApiClient.computeAccountSummary(rows, TimeRange.TODAY, "pub-test", today = LocalDate(2026, 11, 20))
+        assertEquals(1.5, summary.dailyGoal) // 10 / 7 = 1.43 -> 1.5
+        assertEquals(1.4, AdMobApiClient.ceilToTenth(1.4))
     }
 
     @Test

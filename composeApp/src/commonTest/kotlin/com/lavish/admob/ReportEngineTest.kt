@@ -83,4 +83,25 @@ class ReportEngineTest {
         assertEquals(r.lines.size + 2, lines.size)
         assertNull(ReportEngine.run(emptyList(), ReportQuery(), today).change(ReportMetric.EARNINGS))
     }
+
+    @Test
+    fun multiDimensionBreakdownWithAdUnitAndShowRate() {
+        val unitRows = listOf(
+            AdMobReportRow("20261121", "a1", "App 1", "BANNER", "US", 1.0, 80, 0, 200, 100, "u1", "home_banner"),
+            AdMobReportRow("20261121", "a1", "App 1", "BANNER", "US", 2.0, 50, 0, 100, 100, "u2", "detail_banner"),
+            AdMobReportRow("20261120", "a1", "App 1", "BANNER", "IN", 4.0, 30, 0, 50, 50, "u1", "home_banner")
+        )
+        val r = ReportEngine.run(
+            unitRows,
+            ReportQuery(ReportDateRange.LAST_7_DAYS, ReportDimension.APP, ReportMetric.EARNINGS,
+                extraDimensions = listOf(ReportDimension.COUNTRY, ReportDimension.AD_UNIT)),
+            today
+        )
+        assertEquals(3, r.lines.size)
+        assertEquals(listOf("App 1", "IN", "home_banner"), r.lines.first().labels) // highest earnings first
+        assertEquals(80.0, r.lines.first { it.labels[2] == "home_banner" && it.labels[1] == "US" }.totals.showRate)
+        assertEquals(250.0, r.totals.matchedRequests.toDouble())
+        val csv = ReportEngine.toCsv(r, "USD").trim().lines()
+        assertTrue(csv.first().startsWith("App,Country,Ad unit,"))
+    }
 }

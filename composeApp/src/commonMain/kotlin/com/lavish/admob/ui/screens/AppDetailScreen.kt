@@ -53,6 +53,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -279,22 +282,23 @@ fun AppDetailScreen(
     val days7List = remember(now) { (6 downTo 0).mapTo(HashSet()) { AdMobApiClient.formatDateKey(now.minus(it, DateTimeUnit.DAY)) } }
     val days30List = remember(now) { (29 downTo 0).mapTo(HashSet()) { AdMobApiClient.formatDateKey(now.minus(it, DateTimeUnit.DAY)) } }
 
-    // Filter report rows specifically for this app
-    val appAllRows = remember(reportRows, app.id, app.name) {
-        reportRows.filter { row ->
-            (row.appId.isNotBlank() && row.appId == app.id) ||
-            (row.appName.isNotBlank() && row.appName.equals(app.name, ignoreCase = true))
-        }
-    }
-
-    // Filter rows based on active horizon
-    val activeRows = remember(appAllRows, selectedHorizon, todayStr, yesterdayStr, days7List, days30List) {
-        when (selectedHorizon) {
-            DetailTimeHorizon.TODAY -> appAllRows.filter { it.date == todayStr }
-            DetailTimeHorizon.YESTERDAY -> appAllRows.filter { it.date == yesterdayStr }
-            DetailTimeHorizon.DAYS_7 -> appAllRows.filter { it.date in days7List }
-            DetailTimeHorizon.DAYS_30 -> appAllRows.filter { it.date in days30List }
-            DetailTimeHorizon.DAYS_90 -> appAllRows
+    // Filter report rows for this app + horizon OFF the main thread (the full 90-day row list
+    // can be tens of thousands of rows now that it includes ad units).
+    val activeRows by produceState(initialValue = emptyList<AdMobReportRow>(),
+        reportRows, app.id, app.name, selectedHorizon, todayStr, yesterdayStr, days7List, days30List
+    ) {
+        value = withContext(Dispatchers.Default) {
+            val appAllRows = reportRows.filter { row ->
+                (row.appId.isNotBlank() && row.appId == app.id) ||
+                (row.appName.isNotBlank() && row.appName.equals(app.name, ignoreCase = true))
+            }
+            when (selectedHorizon) {
+                DetailTimeHorizon.TODAY -> appAllRows.filter { it.date == todayStr }
+                DetailTimeHorizon.YESTERDAY -> appAllRows.filter { it.date == yesterdayStr }
+                DetailTimeHorizon.DAYS_7 -> appAllRows.filter { it.date in days7List }
+                DetailTimeHorizon.DAYS_30 -> appAllRows.filter { it.date in days30List }
+                DetailTimeHorizon.DAYS_90 -> appAllRows
+            }
         }
     }
 

@@ -73,7 +73,10 @@ data class AdMobReportRow(
     val impressions: Int,
     val clicks: Int,
     val adRequests: Long = 0L,
-    val matchedRequests: Long = 0L
+    val matchedRequests: Long = 0L,
+    /** Ad unit ID (e.g. "ca-app-pub-123/456"); blank for rows cached before ad-unit support. */
+    val adUnitId: String = "",
+    val adUnitName: String = ""
 )
 
 data class RealAdMobPayload(
@@ -230,7 +233,7 @@ class AdMobApiClient(
               "startDate": { "year": $startYear, "month": $startMonth, "day": $startDay },
               "endDate": { "year": $endYear, "month": $endMonth, "day": $endDay }
             },
-            "dimensions": ["DATE", "APP", "FORMAT", "COUNTRY"],
+            "dimensions": ["DATE", "APP", "AD_UNIT", "FORMAT", "COUNTRY"],
             "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS", "CLICKS", "AD_REQUESTS", "MATCHED_REQUESTS"]
           }
         }
@@ -253,6 +256,43 @@ class AdMobApiClient(
     }
 
     /**
+     * Hourly earnings via the alpha Ads Activity Report (the only AdMob API surface with HOUR).
+     * HOUR is in PST and limited to the last 28 days. Google says this alpha is unsupported, so
+     * callers must treat failure as "hourly not available" rather than an error.
+     */
+    suspend fun fetchHourlyReportRaw(
+        accessToken: String,
+        accountName: String,
+        start: LocalDate,
+        end: LocalDate
+    ): Result<String> = runCatching {
+        val normalizedName = if (accountName.startsWith("accounts/")) accountName else "accounts/$accountName"
+        val requestBody = """
+        {
+          "reportSpec": {
+            "dateRange": {
+              "startDate": { "year": ${start.year}, "month": ${start.month.number}, "day": ${start.day} },
+              "endDate": { "year": ${end.year}, "month": ${end.month.number}, "day": ${end.day} }
+            },
+            "dimensions": ["DATE", "HOUR"],
+            "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"]
+          }
+        }
+        """.trimIndent()
+        val url = "https://admob.googleapis.com/v1alpha/$normalizedName/adsActivityReport:generate"
+        logAdMob("HourlyReport:Request", "URL=$url | Body=$requestBody")
+        val response = httpClient.post(url) {
+            header("Authorization", "Bearer $accessToken")
+            contentType(ContentType.Application.Json)
+            setBody(requestBody)
+        }
+        val bodyText = response.bodyAsText()
+        logAdMob("HourlyReport:Response", "HTTP ${response.status.value} -> ${bodyText.take(500)}")
+        if (response.status.isSuccess()) bodyText
+        else throw Exception("HTTP ${response.status.value}: ${bodyText.take(300)}")
+    }
+
+    /**
      * Calls AdMob Mediation Reporting API to fetch full earnings across all ad sources
      * (Mediation, Bidding partners, and AdMob Network). This matches the AdMob Web Dashboard.
      */
@@ -270,7 +310,7 @@ class AdMobApiClient(
               "startDate": { "year": $startYear, "month": $startMonth, "day": $startDay },
               "endDate": { "year": $endYear, "month": $endMonth, "day": $endDay }
             },
-            "dimensions": ["DATE", "APP", "FORMAT", "COUNTRY"],
+            "dimensions": ["DATE", "APP", "AD_UNIT", "FORMAT", "COUNTRY"],
             "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS", "CLICKS", "AD_REQUESTS", "MATCHED_REQUESTS"]
           }
         }
@@ -468,7 +508,7 @@ class AdMobApiClient(
     /**
      * Full 90-day report at most once per [FULL_REPORT_TTL_MS] (or when the day rolls over / cache is empty).
      * In between, only the last [INCREMENTAL_DAYS] days are re-fetched and merged in: rows are keyed by
-     * (date, app, format, country), so replacing every row whose date falls in the window is exact.
+     * (date, app, ad unit, format, country), so replacing every row whose date falls in the window is exact.
      */
     private suspend fun fetchReportRowsSmart(accessToken: String, accountName: String, today: LocalDate): List<AdMobReportRow> {
         val todayKey = formatDateKey(today)
@@ -622,6 +662,9 @@ class AdMobApiClient(
                 ?: dims["AD_FORMAT"]?.jsonObject?.get("value")?.jsonPrimitive?.content
                 ?: "Standard"
 
+            val adUnitId = dims["AD_UNIT"]?.jsonObject?.get("value")?.jsonPrimitive?.content ?: ""
+            val adUnitName = dims["AD_UNIT"]?.jsonObject?.get("displayLabel")?.jsonPrimitive?.content ?: adUnitId
+
             val earningsMicros = metrics["ESTIMATED_EARNINGS"]?.jsonObject?.get("microsValue")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
             val earnings = earningsMicros / 1_000_000.0
             val imps = metrics["IMPRESSIONS"]?.jsonObject?.get("integerValue")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
@@ -641,7 +684,9 @@ class AdMobApiClient(
                         impressions = imps,
                         clicks = clicks,
                         adRequests = adRequests,
-                        matchedRequests = matchedRequests
+                        matchedRequests = matchedRequests,
+                        adUnitId = adUnitId,
+                        adUnitName = adUnitName
                     )
                 )
             }
@@ -678,6 +723,9 @@ class AdMobApiClient(
             return roundTwoDecimals(total)
         }
 
+        /** Rounds up to one decimal place, tolerant of floating-point noise (1.4000000001 -> 1.4). */
+        fun ceilToTenth(v: Double): Double = kotlin.math.ceil(v * 10.0 - 1e-9) / 10.0
+
         fun formatDateKey(date: LocalDate): String {
             return "${date.year}${date.month.number.toString().padStart(2, '0')}${date.day.toString().padStart(2, '0')}"
         }
@@ -697,29 +745,14 @@ class AdMobApiClient(
             val yesterday = today.minus(1, DateTimeUnit.DAY)
             val yesterdayStr = formatDateKey(yesterday)
 
-            // Dynamically scale daily goal based on recent completed 7-day average if available, min 10.0.
-            // Using completed days (yesterday through 7 days ago) avoids partial-day distortion in the morning.
+            // Auto daily goal = earnings of the last 7 completed days (yesterday back to 7 days ago) / 7,
+            // rounded UP to the next 0.1. e.g. $10 over 7 days -> 10/7 = 1.43 -> $1.50/day.
+            // Falls back to the last 7 days including today if no completed-day earnings exist yet.
             val recentCompleted7Days = keyRange(today, 7, 1)
-            val recentCompletedRows = rows.filter { it.date in recentCompleted7Days }
-            val recent7Rev = recentCompletedRows.sumOf { it.earnings }
-            val distinctDaysWithData = recentCompletedRows.map { it.date }.distinct().size
-
-            val (effectiveRev, daysDivisor) = if (recent7Rev > 0.0) {
-                recent7Rev to maxOf(1, distinctDaysWithData)
-            } else {
-                val recent7Days = keyRange(today, 6, 0)
-                val rRows = rows.filter { it.date in recent7Days }
-                val rRev = rRows.sumOf { it.earnings }
-                val dCount = rRows.map { it.date }.distinct().size
-                rRev to maxOf(1, dCount)
-            }
-            val avgDaily = if (effectiveRev > 0.0) (effectiveRev / daysDivisor.toDouble()) else 0.0
-            val computedDailyGoal = when {
-                avgDaily >= 100.0 -> ((avgDaily * 1.25) / 50.0).roundToLong() * 50.0
-                avgDaily >= 10.0 -> ((avgDaily * 1.25) / 10.0).roundToLong() * 10.0
-                avgDaily > 0.0 -> 10.0
-                else -> 100.0
-            }
+            val completedRev = rows.filter { it.date in recentCompleted7Days }.sumOf { it.earnings }
+            val recent7Rev = if (completedRev > 0.0) completedRev
+                else rows.filter { it.date in keyRange(today, 6, 0) }.sumOf { it.earnings }
+            val computedDailyGoal = if (recent7Rev > 0.0) ceilToTenth(recent7Rev / 7.0) else 100.0
 
             val isCustom = customDailyGoal != null && customDailyGoal > 0.0
             val effectiveDailyGoal = if (isCustom) customDailyGoal else computedDailyGoal

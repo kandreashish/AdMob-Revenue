@@ -84,6 +84,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.lavish.admob.data.AdMobRepository
+import com.lavish.admob.analytics.MixpanelTracker
 import com.lavish.admob.model.AppMonetization
 import com.lavish.admob.model.AutoRefreshInterval
 import com.lavish.admob.model.ThemeMode
@@ -104,6 +105,7 @@ import com.lavish.admob.ui.components.FormatSegmentedBar
 import com.lavish.admob.ui.components.IosPullToRefreshBox
 import com.lavish.admob.ui.components.NavigationTab
 import com.lavish.admob.ui.components.SetGoalDialog
+import com.lavish.admob.ui.components.ShimmerScreenSkeleton
 import com.lavish.admob.ui.components.SolarBottomDock
 import com.lavish.admob.ui.components.UserProfileAvatar
 import com.lavish.admob.ui.navigation.BackHandler
@@ -352,6 +354,9 @@ fun App(
                         showProfileGoalDialog = true
                     }
                 )
+                // Goal dialog is composed right after the Settings screen (same branch) so it always
+                // draws on top of it instead of behind/below it.
+                if (showProfileGoalDialog) ProfileGoalDialog(repository, tracker) { showProfileGoalDialog = false }
             } else if (selectedAppForModal != null) Scoped {
                 val reportRows by repository.reportRows.collectAsState()
                 val selectedRange by repository.selectedTimeRange.collectAsState()
@@ -384,7 +389,7 @@ fun App(
 
                     IosPullToRefreshBox(
                         isRefreshing = isRefreshing,
-                        onRefresh = { repository.refreshRealData() },
+                        onRefresh = { repository.refreshRealData(); if (currentTab == NavigationTab.REPORTS) repository.loadHourly(true) },
                         modifier = Modifier.fillMaxSize()
                     ) {
                         AnimatedContent(
@@ -401,6 +406,12 @@ fun App(
                             label = "tabContent",
                             modifier = Modifier.fillMaxSize()
                         ) { animatedTab ->
+                        // First load / slow network with nothing cached yet: show a shimmer skeleton
+                        // instead of empty zero-value screens.
+                        val firstLoadRows by repository.reportRows.collectAsState()
+                        if (isRefreshing && firstLoadRows.isEmpty()) {
+                            ShimmerScreenSkeleton()
+                        } else
                         when (animatedTab) {
                             NavigationTab.TODAY -> Scoped {
                                 val summary by repository.accountSummary.collectAsState()
@@ -468,8 +479,13 @@ fun App(
                             NavigationTab.REPORTS -> Scoped {
                                 val reportRows by repository.reportRows.collectAsState()
                                 val summary by repository.accountSummary.collectAsState()
+                                val reportApps by repository.allApps.collectAsState()
+                                val hourlyState by repository.hourly.collectAsState()
                                 ReportsScreen(
+                                    hourly = hourlyState,
+                                    onLoadHourly = { repository.loadHourly(it) },
                                     rows = reportRows,
+                                    apps = reportApps,
                                     today = remember(reportRows, summary.lastSyncTime) { repository.accountToday() },
                                     currencySymbol = session.currencySymbol,
                                     currencyCode = session.currencyCode,
@@ -623,32 +639,34 @@ fun App(
                 }
             }
 
-            if (showProfileGoalDialog) Scoped {
-                val summary by repository.accountSummary.collectAsState()
-                val selectedRange by repository.selectedTimeRange.collectAsState()
-                SetGoalDialog(
-                    currentGoal = summary.dailyGoal,
-                    currencySymbol = summary.currencySymbol,
-                    isCustomGoal = summary.isCustomGoal,
-                    selectedRange = selectedRange,
-                    periodDays = summary.periodDays,
-                    onDismiss = {
-                        tracker.trackModalDismissed("Set Daily Goal Modal", dismissMethod = "cancel_button")
-                        showProfileGoalDialog = false
-                    },
-                    onSaveGoal = { newGoal ->
-                        tracker.trackModalDismissed("Set Daily Goal Modal", dismissMethod = "save_goal_button")
-                        repository.setCustomDailyGoal(newGoal)
-                    },
-                    onResetToAuto = {
-                        tracker.trackModalDismissed("Set Daily Goal Modal", dismissMethod = "reset_auto_button")
-                        repository.setCustomDailyGoal(null)
-                    }
-                )
-            }
         }
     }
 }
+}
+
+@Composable
+private fun ProfileGoalDialog(repository: AdMobRepository, tracker: MixpanelTracker, onClose: () -> Unit) {
+    val summary by repository.accountSummary.collectAsState()
+    val selectedRange by repository.selectedTimeRange.collectAsState()
+    SetGoalDialog(
+        currentGoal = summary.dailyGoal,
+        currencySymbol = summary.currencySymbol,
+        isCustomGoal = summary.isCustomGoal,
+        selectedRange = selectedRange,
+        periodDays = summary.periodDays,
+        onDismiss = {
+            tracker.trackModalDismissed("Set Daily Goal Modal", dismissMethod = "cancel_button")
+            onClose()
+        },
+        onSaveGoal = { newGoal ->
+            tracker.trackModalDismissed("Set Daily Goal Modal", dismissMethod = "save_goal_button")
+            repository.setCustomDailyGoal(newGoal)
+        },
+        onResetToAuto = {
+            tracker.trackModalDismissed("Set Daily Goal Modal", dismissMethod = "reset_auto_button")
+            repository.setCustomDailyGoal(null)
+        }
+    )
 }
 
 /** Gives [content] its own recomposition scope so state read inside it only invalidates this block. */

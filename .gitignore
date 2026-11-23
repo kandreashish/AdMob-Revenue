@@ -100,3 +100,6 @@ Pods/
 *.log
 
 playstore/icon_backup_original/
+
+# Promo code seed (secret)
+promo_codes_seed.json

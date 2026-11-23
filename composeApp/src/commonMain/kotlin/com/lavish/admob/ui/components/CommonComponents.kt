@@ -1,5 +1,12 @@
 package com.lavish.admob.ui.components
 
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.fillMaxHeight
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
@@ -532,6 +539,46 @@ fun SolarBottomDock(
     onTabSelected: (NavigationTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val tabs = NavigationTab.entries
+    val tabCount = tabs.size
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val latestOnTabSelected by androidx.compose.runtime.rememberUpdatedState(onTabSelected)
+    val latestTab by androidx.compose.runtime.rememberUpdatedState(currentTab)
+
+    var trackWidthPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    // Indicator position in "slot units" (0f..tabCount-1); fractional while gliding.
+    val indicatorPos = androidx.compose.runtime.remember {
+        androidx.compose.animation.core.Animatable(currentTab.ordinal.toFloat())
+    }
+    var isDragging by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val pressScale by androidx.compose.animation.core.animateFloatAsState(
+        if (isDragging) 1.12f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 500f),
+        label = "dockLift"
+    )
+    val ioSpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.72f, stiffness = 420f)
+
+    // Follow external tab changes (taps, back button, links) with an iOS-like spring.
+    androidx.compose.runtime.LaunchedEffect(currentTab) {
+        if (!isDragging) indicatorPos.animateTo(currentTab.ordinal.toFloat(), ioSpring)
+    }
+
+    fun slotFor(x: Float): Float {
+        if (trackWidthPx <= 0f) return 0f
+        val slotW = trackWidthPx / tabCount
+        return ((x - slotW / 2f) / slotW).coerceIn(0f, (tabCount - 1).toFloat())
+    }
+
+    fun selectIfChanged(index: Int) {
+        val tab = tabs[index]
+        if (tab != latestTab) {
+            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+            latestOnTabSelected(tab)
+        }
+    }
+
     Surface(
         modifier = modifier
             .padding(horizontal = 12.dp, vertical = 10.dp)
@@ -545,75 +592,98 @@ fun SolarBottomDock(
         color = SolarTheme.colors.bottomDockBackground,
         shape = RoundedCornerShape(999.dp)
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            NavigationTab.entries.forEach { tab ->
-                val isSelected = tab == currentTab
-                val dockSpec = androidx.compose.animation.core.tween<Color>(250, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-                val tabBgColor by animateColorAsState(
-                    if (isSelected) SolarTheme.colors.primaryContainer else SolarTheme.colors.primaryContainer.copy(alpha = 0f),
-                    animationSpec = dockSpec,
-                    label = "dockBg"
-                )
-                val iconTint by animateColorAsState(
-                    if (isSelected) {
-                        if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.lavish.admob.theme.AdMobSelectedText
-                    } else {
-                        SolarTheme.colors.textSecondary
-                    },
-                    animationSpec = dockSpec,
-                    label = "dockTint"
-                )
-                val hPad by androidx.compose.animation.core.animateDpAsState(
-                    if (isSelected) 10.dp else 8.dp,
-                    animationSpec = androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                    label = "dockPad"
-                )
-
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(tabBgColor)
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) { onTabSelected(tab) }
-                        .animateContentSize(androidx.compose.animation.core.tween(250, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-                        // Brand red accent: short underline on the selected tab
-                        .drawBehind {
-                            if (isSelected) {
-                                val w = size.width * 0.35f
-                                val y = size.height - 2.dp.toPx()
-                                drawLine(
-                                    color = com.lavish.admob.theme.CoralCrimson,
-                                    start = androidx.compose.ui.geometry.Offset((size.width - w) / 2f, y),
-                                    end = androidx.compose.ui.geometry.Offset((size.width + w) / 2f, y),
-                                    strokeWidth = 2.5.dp.toPx(),
-                                    cap = androidx.compose.ui.graphics.StrokeCap.Round
-                                )
-                            }
+                .padding(horizontal = 6.dp, vertical = 5.dp)
+                .height(52.dp)
+                .onSizeChanged { trackWidthPx = it.width.toFloat() }
+                // Glide: press anywhere on the dock and slide — the pill follows your finger
+                // and tabs switch live as you cross them (iOS 26 tab bar behaviour).
+                .pointerInput(tabCount) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            scope.launch { indicatorPos.animateTo(slotFor(offset.x), ioSpring) }
+                            selectIfChanged(kotlin.math.round(slotFor(offset.x)).toInt())
+                        },
+                        onHorizontalDrag = { change, _ ->
+                            change.consume()
+                            val pos = slotFor(change.position.x)
+                            scope.launch { indicatorPos.snapTo(pos) }
+                            selectIfChanged(kotlin.math.round(pos).toInt())
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                            val target = kotlin.math.round(indicatorPos.value).toInt()
+                            selectIfChanged(target)
+                            scope.launch { indicatorPos.animateTo(target.toFloat(), ioSpring) }
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                            scope.launch { indicatorPos.animateTo(latestTab.ordinal.toFloat(), ioSpring) }
                         }
-                        .padding(horizontal = hPad, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (isSelected) tab.activeIcon else tab.inactiveIcon,
-                        contentDescription = tab.label,
-                        tint = iconTint,
-                        modifier = Modifier.size(18.dp)
                     )
-                    if (isSelected) {
-                        Spacer(modifier = Modifier.width(4.dp))
+                }
+        ) {
+            // Sliding pill
+            if (trackWidthPx > 0f) {
+                val slotWDp = with(density) { (trackWidthPx / tabCount).toDp() }
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            translationX = indicatorPos.value * (trackWidthPx / tabCount)
+                            scaleX = pressScale
+                            scaleY = pressScale
+                        }
+                        .width(slotWDp)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(
+                            SolarTheme.colors.primaryContainer.copy(alpha = if (isDragging) 0.75f else 1f)
+                        )
+                )
+            }
+
+            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                tabs.forEachIndexed { index, tab ->
+                    // 0..1 how "under the pill" this slot is — drives smooth colour blending while gliding.
+                    val closeness = (1f - kotlin.math.abs(indicatorPos.value - index)).coerceIn(0f, 1f)
+                    val activeTint = if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.lavish.admob.theme.AdMobSelectedText
+                    val tint = androidx.compose.ui.graphics.lerp(SolarTheme.colors.textSecondary, activeTint, closeness)
+                    val isSelected = tab == currentTab
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(999.dp))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                if (tab != currentTab) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                onTabSelected(tab)
+                            }
+                            .graphicsLayer {
+                                val s = 1f + 0.08f * closeness * (if (isDragging) 1f else 0f)
+                                scaleX = s; scaleY = s
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isSelected) tab.activeIcon else tab.inactiveIcon,
+                            contentDescription = tab.label,
+                            tint = tint,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = tab.label,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = iconTint,
+                            fontSize = 10.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = tint,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )

@@ -812,6 +812,40 @@ class AdMobRepository(
         }
     }
 
+    private val _hourly = MutableStateFlow<HourlyState>(HourlyState.Idle)
+    val hourly: StateFlow<HourlyState> = _hourly.asStateFlow()
+    private var hourlyJob: kotlinx.coroutines.Job? = null
+
+    /** Loads the last ~3 PST days hourly (covers local Today/Yesterday for any time zone). */
+    fun loadHourly(force: Boolean = false) {
+        if (_hourly.value is HourlyState.Unavailable && !force) return
+        if (hourlyJob?.isActive == true) return
+        val token = currentAccessToken
+        val account = activePublisherId
+        if (token.isNullOrBlank() || account.isBlank()) {
+            _hourly.value = HourlyState.Unavailable("Sign in to load hourly data.")
+            return
+        }
+        if (_hourly.value !is HourlyState.Ready) _hourly.value = HourlyState.Loading
+        hourlyJob = scope.launch {
+            val pstToday = Clock.System.now().toLocalDateTime(TimeZone.of("America/Los_Angeles")).date
+            val result = apiClient.fetchHourlyReportRaw(token, account, pstToday.minus(2, DateTimeUnit.DAY), pstToday)
+            _hourly.value = result.fold(
+                onSuccess = { HourlyState.Ready(HourlyParser.parse(it)) },
+                onFailure = { e ->
+                    val msg = e.message.orEmpty()
+                    HourlyState.Unavailable(
+                        when {
+                            "403" in msg || "PERMISSION" in msg -> "Google hasn't enabled hourly reporting (alpha API) for this AdMob account."
+                            "404" in msg -> "Google has retired the hourly reporting API."
+                            else -> "Couldn't load hourly data. Pull to refresh to retry."
+                        }
+                    )
+                }
+            )
+        }
+    }
+
     fun logout() {
         val prevUser = _session.value.email.ifBlank { _session.value.publisherId }
         if (prevUser.isNotBlank()) {

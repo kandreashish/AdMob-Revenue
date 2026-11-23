@@ -8,13 +8,14 @@ import kotlin.math.roundToLong
 /**
  * AdMob-style report builder ("Reports" tab).
  *
- * Works entirely on the cached [AdMobReportRow]s (last 90 days, DATE × APP × FORMAT × COUNTRY),
+ * Works entirely on the cached [AdMobReportRow]s (last 90 days, DATE × APP × AD_UNIT × FORMAT × COUNTRY),
  * so switching dimensions / ranges / sorting is instant and works offline.
  */
 
 enum class ReportDimension(val label: String) {
     DATE("Date"),
     APP("App"),
+    AD_UNIT("Ad unit"),
     FORMAT("Ad format"),
     COUNTRY("Country")
 }
@@ -23,6 +24,8 @@ enum class ReportMetric(val label: String, val shortLabel: String) {
     EARNINGS("Est. earnings", "Earnings"),
     REQUESTS("Requests", "Requests"),
     MATCH_RATE("Match rate", "Match rate"),
+    MATCHED_REQUESTS("Matched requests", "Matched"),
+    SHOW_RATE("Show rate", "Show rate"),
     IMPRESSIONS("Impressions", "Impr."),
     ECPM("eCPM", "eCPM"),
     CLICKS("Clicks", "Clicks"),
@@ -61,6 +64,7 @@ data class ReportTotals(
     val clicks: Long = 0L
 ) {
     val matchRate: Double get() = if (requests > 0) matchedRequests.toDouble() / requests * 100.0 else 0.0
+    val showRate: Double get() = if (matchedRequests > 0) impressions.toDouble() / matchedRequests * 100.0 else 0.0
     val ecpm: Double get() = if (impressions > 0) earnings / impressions * 1000.0 else 0.0
     val ctr: Double get() = if (impressions > 0) clicks.toDouble() / impressions * 100.0 else 0.0
     val hasRequestData: Boolean get() = requests > 0
@@ -69,6 +73,8 @@ data class ReportTotals(
         ReportMetric.EARNINGS -> earnings
         ReportMetric.REQUESTS -> requests.toDouble()
         ReportMetric.MATCH_RATE -> matchRate
+        ReportMetric.MATCHED_REQUESTS -> matchedRequests.toDouble()
+        ReportMetric.SHOW_RATE -> showRate
         ReportMetric.IMPRESSIONS -> impressions.toDouble()
         ReportMetric.ECPM -> ecpm
         ReportMetric.CLICKS -> clicks.toDouble()
@@ -87,7 +93,9 @@ data class ReportTotals(
 data class ReportLine(
     val key: String,
     val label: String,
-    val totals: ReportTotals
+    val totals: ReportTotals,
+    /** One label per dimension in [ReportQuery.dimensions] (same order). */
+    val labels: List<String> = listOf(label)
 )
 
 data class ReportQuery(
@@ -96,8 +104,12 @@ data class ReportQuery(
     val sortMetric: ReportMetric? = null,   // null = sort by dimension (date newest first / label A-Z)
     val sortDescending: Boolean = true,
     val appFilter: String? = null,     // appId (or name when id missing)
-    val formatFilter: String? = null
-)
+    val formatFilter: String? = null,
+    /** Additional breakdown dimensions after [dimension] (e.g. APP + COUNTRY + AD_UNIT). */
+    val extraDimensions: List<ReportDimension> = emptyList()
+) {
+    val dimensions: List<ReportDimension> get() = (listOf(dimension) + extraDimensions).distinct()
+}
 
 data class ReportResult(
     val query: ReportQuery,
@@ -135,28 +147,23 @@ object ReportEngine {
         val cur = filtered.filter { it.date in curRange }
         val prev = filtered.filter { it.date in prevRange }
 
-        val grouped: Map<String, List<AdMobReportRow>> = when (query.dimension) {
-            ReportDimension.DATE -> cur.groupBy { it.date }
-            ReportDimension.APP -> cur.groupBy { appKey(it) }
-            ReportDimension.FORMAT -> cur.groupBy { it.format }
-            ReportDimension.COUNTRY -> cur.groupBy { it.country.ifBlank { "Unknown" } }
-        }
+        val dims = query.dimensions
+        val singleDate = dims == listOf(ReportDimension.DATE)
+        val grouped: Map<List<String>, List<AdMobReportRow>> = cur.groupBy { r -> dims.map { dimKey(it, r) } }
 
         var lines = grouped.map { (k, list) ->
+            val first = list.first()
+            val labels = dims.mapIndexed { i, d -> dimLabel(d, k[i], first) }
             ReportLine(
-                key = k,
-                label = when (query.dimension) {
-                    ReportDimension.DATE -> prettyDate(k)
-                    ReportDimension.APP -> list.first().appName.ifBlank { k }
-                    ReportDimension.FORMAT -> prettyFormat(k)
-                    ReportDimension.COUNTRY -> k
-                },
-                totals = list.fold(ReportTotals()) { acc, r -> acc + r }
+                key = k.joinToString("\u0001"),
+                label = labels.joinToString(" · "),
+                totals = list.fold(ReportTotals()) { acc, r -> acc + r },
+                labels = labels
             )
         }
 
-        // Date reports show every day in range (AdMob shows zero days too)
-        if (query.dimension == ReportDimension.DATE) {
+        // Date-only reports show every day in range (AdMob shows zero days too)
+        if (singleDate) {
             val existing = lines.associateBy { it.key }
             lines = (0 until span).map { i ->
                 val d = key(start.plus(i))
@@ -182,9 +189,30 @@ object ReportEngine {
         )
     }
 
+    fun dimKey(d: ReportDimension, r: AdMobReportRow): String = when (d) {
+        ReportDimension.DATE -> r.date
+        ReportDimension.APP -> appKey(r)
+        ReportDimension.AD_UNIT -> r.adUnitId.ifBlank { r.adUnitName }
+        ReportDimension.FORMAT -> r.format
+        ReportDimension.COUNTRY -> r.country.ifBlank { "Unknown" }
+    }
+
+    private fun dimLabel(d: ReportDimension, k: String, r: AdMobReportRow): String = when (d) {
+        ReportDimension.DATE -> prettyDate(k)
+        ReportDimension.APP -> r.appName.ifBlank { k }
+        ReportDimension.AD_UNIT -> r.adUnitName.ifBlank { k }.ifBlank { "Unknown ad unit" }
+        ReportDimension.FORMAT -> prettyFormat(k)
+        ReportDimension.COUNTRY -> k
+    }
+
+    /** Lines behind [chartSeries] (same order), so the UI can show icons for app rows. */
+    fun chartLines(result: ReportResult, metric: ReportMetric): List<ReportLine> =
+        if (result.query.dimensions == listOf(ReportDimension.DATE)) result.lines.sortedBy { it.key }
+        else result.lines.sortedByDescending { it.totals.value(metric) }.take(8)
+
     /** Date-ordered series for the chart (always chronological, independent of table sort). */
     fun chartSeries(result: ReportResult, metric: ReportMetric): List<Pair<String, Double>> {
-        val lines = if (result.query.dimension == ReportDimension.DATE) {
+        val lines = if (result.query.dimensions == listOf(ReportDimension.DATE)) {
             result.lines.sortedBy { it.key }
         } else {
             result.lines.sortedByDescending { it.totals.value(metric) }.take(8)
@@ -193,21 +221,22 @@ object ReportEngine {
     }
 
     fun toCsv(result: ReportResult, currencyCode: String): String {
-        val header = listOf(result.query.dimension.label) + ReportMetric.entries.map {
+        val dims = result.query.dimensions
+        val header = dims.map { it.label } + ReportMetric.entries.map {
             if (it == ReportMetric.EARNINGS || it == ReportMetric.ECPM) "${it.label} ($currencyCode)" else it.label
         }
-        fun row(label: String, t: ReportTotals) = (listOf(label) + ReportMetric.entries.map { formatPlain(it, t.value(it)) })
+        fun row(labels: List<String>, t: ReportTotals) = (labels + ReportMetric.entries.map { formatPlain(it, t.value(it)) })
             .joinToString(",") { csvEscape(it) }
         return buildString {
             appendLine(header.joinToString(",") { csvEscape(it) })
-            result.lines.forEach { appendLine(row(it.label, it.totals)) }
-            appendLine(row("Total", result.totals))
+            result.lines.forEach { appendLine(row(it.labels, it.totals)) }
+            appendLine(row(listOf("Total") + List(dims.size - 1) { "" }, result.totals))
         }
     }
 
     fun formatPlain(metric: ReportMetric, v: Double): String = when (metric) {
         ReportMetric.EARNINGS, ReportMetric.ECPM -> round2(v).toString()
-        ReportMetric.MATCH_RATE, ReportMetric.CTR -> round2(v).toString()
+        ReportMetric.MATCH_RATE, ReportMetric.SHOW_RATE, ReportMetric.CTR -> round2(v).toString()
         else -> v.roundToLong().toString()
     }
 

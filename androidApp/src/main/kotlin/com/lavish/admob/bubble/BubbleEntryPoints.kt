@@ -14,7 +14,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -57,6 +59,8 @@ fun BubbleTodayBanner() {
     val priceLabel = price?.oneTimePurchaseOfferDetails?.formattedPrice ?: config.priceLabel
     // Reactive: hides the "bubble is off" card the instant the bubble starts
     val enabled = EarningsBubbleService.enabledFlow(context).collectAsState().value == true
+    var trialEndedDismissed by remember { mutableStateOf(BubbleLocalPrefs.isTrialEndedBannerDismissed(context)) }
+    if (access == BubbleAccess.TrialExpired && trialEndedDismissed) return
 
     val (title, body) = when (val a = access) {
         BubbleAccess.NotStarted -> "Earnings bubble" to "See today's earnings on top of any app. Try it free for ${config.trialLabel}."
@@ -96,7 +100,20 @@ fun BubbleTodayBanner() {
                 }
                 Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = primary)
+            if (access == BubbleAccess.TrialExpired) {
+                // Let users hide the "trial has ended" card for good (unlock stays available in Settings)
+                IconButton(
+                    onClick = {
+                        BubbleLocalPrefs.dismissTrialEndedBanner(context)
+                        trialEndedDismissed = true
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                }
+            } else {
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = primary)
+            }
         }
     }
 }

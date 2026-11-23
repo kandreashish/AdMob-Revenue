@@ -53,6 +53,8 @@ data class PromoRecord(
  *   bubble/{uid}/unlocked         false -> true only, requires purchase/token
  *   bubble/{uid}/purchase/...     token, productId, purchasedAt (write-once)
  *   bubble/{uid}/promo/...        shownCount, lastShownAt, dismissed, completed
+ *   bubble/{uid}/promoCode        8-digit code redeemed by this user (write-once)
+ *   promoCodes/{code}             admin-seeded {active:true}; client adds redeemedBy/redeemedAt
  *
  * Edge cases handled:
  *  - Cold start: RTDB's first callback can come from an empty local cache, which looks like
@@ -288,6 +290,67 @@ object BubbleEntitlementManager {
         } catch (e: Exception) {
             Log.w(TAG, "markUnlocked failed: ${e.message}")
             false
+        }
+    }
+
+    sealed interface RedeemResult {
+        data object Success : RedeemResult
+        data object InvalidFormat : RedeemResult
+        /** Code doesn't exist, was already used, or this account already redeemed one. */
+        data object Rejected : RedeemResult
+        data object NotSignedIn : RedeemResult
+        data object TooManyAttempts : RedeemResult
+        data class Failed(val message: String?) : RedeemResult
+    }
+
+    private var failedRedeems = 0
+    private var redeemLockedUntil = 0L
+
+    /**
+     * Redeems a single-use 8-digit promo code and unlocks the bubble forever.
+     *
+     * Codes live at promoCodes/{code} (seeded by admin, unreadable by clients). One atomic
+     * multi-path update claims the code and unlocks the user; the DB rules reject it unless the
+     * code exists, is active, is unclaimed, and this user hasn't redeemed a code before.
+     */
+    suspend fun redeemPromoCode(raw: String): RedeemResult {
+        val code = raw.filter { it.isDigit() }
+        if (code.length != 8) return RedeemResult.InvalidFormat
+        val u = uid ?: return RedeemResult.NotSignedIn
+        val ref = userRef ?: return RedeemResult.NotSignedIn
+        if (unlocked || ownedOnPlay) return RedeemResult.Success
+        if (System.currentTimeMillis() < redeemLockedUntil) return RedeemResult.TooManyAttempts
+
+        val updates = mapOf<String, Any>(
+            "promoCodes/$code/redeemedBy" to u,
+            "promoCodes/$code/redeemedAt" to ServerValue.TIMESTAMP,
+            "bubble/$u/promoCode" to code,
+            "bubble/$u/unlocked" to true
+        )
+        return try {
+            db.reference.updateChildren(updates).await()
+            failedRedeems = 0
+            unlocked = true
+            saveLocal { putBoolean(k("unlocked"), true) }
+            markPromoCompleted()
+            recompute()
+            RedeemResult.Success
+        } catch (e: Exception) {
+            Log.w(TAG, "redeemPromoCode failed: ${e.message}")
+            val denied = e.message?.contains("permission", ignoreCase = true) == true
+            if (!denied) return RedeemResult.Failed(e.message)
+            // Slow down guessing: lock for 1 min after 5 wrong codes, doubling after that.
+            if (++failedRedeems >= 5) {
+                redeemLockedUntil = System.currentTimeMillis() + 60_000L * (1L shl (failedRedeems - 5).coerceAtMost(6))
+            }
+            // Same account may have already redeemed (e.g. on another device): re-check.
+            val already = runCatching { ref.child("unlocked").get().await().getValue(Boolean::class.java) }.getOrNull()
+            if (already == true) {
+                unlocked = true
+                saveLocal { putBoolean(k("unlocked"), true) }
+                recompute()
+                RedeemResult.Success
+            } else RedeemResult.Rejected
         }
     }
 

@@ -50,6 +50,13 @@ object BubbleLocalPrefs {
     }
     fun appOpens(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_APP_OPENS, 0)
+
+    private const val KEY_TRIAL_ENDED_DISMISSED = "trial_ended_banner_dismissed"
+    fun isTrialEndedBannerDismissed(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_TRIAL_ENDED_DISMISSED, false)
+    fun dismissTrialEndedBanner(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_TRIAL_ENDED_DISMISSED, true).apply()
+    }
 }
 
 /**
@@ -82,6 +89,8 @@ fun BubblePromoHost(
     var showPromo by remember { mutableStateOf(false) }
     var autoShownThisSession by rememberSaveable { mutableStateOf(false) }
     var isWorking by remember { mutableStateOf(false) }
+    var promoCodeError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(showPromo) { if (!showPromo) promoCodeError = null }
 
     LaunchedEffect(Unit) {
         BubbleFirebase.fetchRemoteConfig()
@@ -229,6 +238,28 @@ fun BubblePromoHost(
             onLater = {
                 BubbleFirebase.log(context, BubbleEvents.PROMO_LATER)
                 showPromo = false
+            },
+            promoCodeError = promoCodeError,
+            onRedeemCode = { code ->
+                isWorking = true
+                promoCodeError = null
+                scope.launch {
+                    val r = BubbleEntitlementManager.redeemPromoCode(code)
+                    isWorking = false
+                    BubbleFirebase.log(context, BubbleEvents.PROMO_CODE_REDEEM, mapOf("result" to r::class.simpleName))
+                    when (r) {
+                        BubbleEntitlementManager.RedeemResult.Success -> {
+                            showPromo = false
+                            Toast.makeText(context, "Promo code applied! Bubble unlocked forever.", Toast.LENGTH_LONG).show()
+                            ensureOverlayThenStart()
+                        }
+                        BubbleEntitlementManager.RedeemResult.InvalidFormat -> promoCodeError = "Enter all 8 digits."
+                        BubbleEntitlementManager.RedeemResult.Rejected -> promoCodeError = "This code is invalid or has already been used."
+                        BubbleEntitlementManager.RedeemResult.NotSignedIn -> promoCodeError = "Still syncing your account. Try again in a moment."
+                        BubbleEntitlementManager.RedeemResult.TooManyAttempts -> promoCodeError = "Too many attempts. Please wait a few minutes."
+                        is BubbleEntitlementManager.RedeemResult.Failed -> promoCodeError = "Couldn't check the code. Check your connection and try again."
+                    }
+                }
             },
             onNeverShow = {
                 BubbleFirebase.log(context, BubbleEvents.PROMO_NEVER)
