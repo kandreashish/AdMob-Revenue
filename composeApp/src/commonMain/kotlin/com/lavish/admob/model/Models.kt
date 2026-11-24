@@ -182,4 +182,8 @@ fun maskPublisherId(publisherId: String): String {
     return prefix + body.take(keepCount) + "-".repeat(dashCount)
 }
 
+const val APP_VERSION_NAME = "2.0.4"
+const val APP_VERSION = "v$APP_VERSION_NAME"
+
+
 

@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lavish.admob.model.AccountSummary
+import com.lavish.admob.model.APP_VERSION
 import com.lavish.admob.theme.BotanicalGreen
 import com.lavish.admob.theme.BotanicalGreenDark
 import com.lavish.admob.theme.BotanicalGreenLight
@@ -279,6 +280,25 @@ fun FullScreenEarningScreen(
                     )
                 }
             }
+        }
+
+        // Top-Left: App version (very subtle, with burn-in drift)
+        AnimatedVisibility(
+            visible = !showControls,
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(200)),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(horizontal = 24.dp, vertical = 20.dp)
+                .graphicsLayer { translationX = shiftX.value * 0.4f; translationY = shiftY.value * 0.4f }
+        ) {
+            Text(
+                text = APP_VERSION,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.8.sp,
+                color = textSecondaryColor.copy(alpha = 0.45f)
+            )
         }
 
         // Top-Left Mini Pill indicating Full Screen

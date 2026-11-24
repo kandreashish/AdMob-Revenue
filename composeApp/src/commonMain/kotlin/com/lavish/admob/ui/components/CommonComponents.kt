@@ -95,6 +95,7 @@ fun SolarHeader(
     accountName: String? = null,
     avatarUrl: String? = null,
     isOffline: Boolean = false,
+    version: String? = null,
     onAccountClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -108,6 +109,16 @@ fun SolarHeader(
         Column(
             modifier = Modifier.weight(1f, fill = false)
         ) {
+            if (version != null) {
+                Text(
+                    text = version,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal,
+                    letterSpacing = 0.5.sp,
+                    color = SolarTheme.colors.textSecondary.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+            }
             Text(
                 text = title,
                 fontSize = 20.sp,

@@ -132,7 +132,7 @@ class MixpanelTracker(
         val enrichedProps = properties.toMutableMap().apply {
             put("\$last_seen", Clock.System.now().toEpochMilliseconds())
             put("platform", getPlatformName())
-            put("app_version", "1.0.0")
+            put("app_version", com.lavish.admob.model.APP_VERSION_NAME)
         }
 
         val payload = buildJsonObject {
@@ -177,7 +177,7 @@ class MixpanelTracker(
             put("time", nowEpochSeconds)
             put("\$insert_id", generateRandomId())
             put("platform", getPlatformName())
-            put("app_version", "1.0.0")
+            put("app_version", com.lavish.admob.model.APP_VERSION_NAME)
             put("is_identified_user", isIdentified)
         }
 

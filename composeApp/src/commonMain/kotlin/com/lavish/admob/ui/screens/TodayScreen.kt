@@ -73,6 +73,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import com.lavish.admob.model.AccountSummary
+import com.lavish.admob.model.APP_VERSION
 import com.lavish.admob.model.AppMonetization
 import com.lavish.admob.model.TimeRange
 import com.lavish.admob.theme.BorderSubtle
@@ -165,6 +166,7 @@ fun TodayScreen(
                 accountName = accountName,
                 avatarUrl = avatarUrl,
                 isOffline = isOffline,
+                version = APP_VERSION,
                 onAccountClick = onAccountClick
             )
         }
