@@ -68,6 +68,9 @@ import kotlinx.coroutines.delay
 import kotlinx.datetime.toLocalDateTime
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 @Composable
 fun FullScreenEarningScreen(
@@ -103,7 +106,8 @@ fun FullScreenEarningScreen(
     // Deep navy HUD palette (matches the Play Store full-screen preview)
     val navyCenter = Color(0xFF16233A)
     val navyEdge = Color(0xFF0B0F17)
-    val textPrimaryColor = Color(0xFFFFFFFF)
+    // Burn-in: avoid pure white for the largest static glyphs
+    val textPrimaryColor = Color(0xFFE0E0E0)
     val textSecondaryColor = Color(0xFF9AA0A6)
     val statValueColor = Color(0xFFE8EAED)
     val liveGreen = Color(0xFF81C995)
@@ -116,6 +120,47 @@ fun FullScreenEarningScreen(
         if (showControls) {
             delay(4000L)
             showControls = false
+        }
+    }
+
+    // ---- Burn-in protection ----
+    // (a) Pixel shift: drift main content & HUD corners to a random offset every 90s (draw phase only)
+    val density = LocalDensity.current
+    val shiftX = remember { Animatable(0f) }
+    val shiftY = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        val maxPx = with(density) { BURN_IN_MAX_SHIFT.toPx() }
+        while (true) {
+            delay(BURN_IN_SHIFT_INTERVAL_MS)
+            val tx = (Random.nextFloat() * 2f - 1f) * maxPx
+            val ty = (Random.nextFloat() * 2f - 1f) * maxPx
+            launch { shiftX.animateTo(tx, tween(4_000, easing = LinearEasing)) }
+            shiftY.animateTo(ty, tween(4_000, easing = LinearEasing))
+        }
+    }
+
+    // (b) Idle / night dimming: dim after inactivity, dimmer at night; tap or revenue bump wakes it
+    var lastActivityMs by remember { mutableStateOf(nowMs()) }
+    LaunchedEffect(summary.todayRevenue) { lastActivityMs = nowMs() }
+    val clockMs by produceState(nowMs()) {
+        while (true) { delay(15_000L); value = nowMs() }
+    }
+    val isIdle = clockMs - lastActivityMs >= IDLE_DIM_AFTER_MS
+    val targetBrightness = when {
+        !isIdle -> 1f
+        isNightHour(clockMs) -> NIGHT_DIM_BRIGHTNESS
+        else -> IDLE_DIM_BRIGHTNESS
+    }
+    val brightness by animateFloatAsState(targetBrightness, tween(2_000), label = "burnInDim")
+
+    // (c) Hourly refresh: briefly fade to black to "exercise" pixels evenly
+    val refresh = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(REFRESH_INTERVAL_MS)
+            refresh.animateTo(1f, tween(1_500))
+            delay(3_000L)
+            refresh.animateTo(0f, tween(1_500))
         }
     }
 
@@ -134,6 +179,10 @@ fun FullScreenEarningScreen(
             ) {
                 // While the "Tap screen to exit" hint is visible, a tap exits.
                 // Once it has faded, the first tap just brings the controls back.
+                // If dimmed, the first tap only wakes the screen.
+                val wasIdle = isIdle
+                lastActivityMs = nowMs()
+                if (wasIdle) return@clickable
                 if (showControls) onExit() else showControls = true
             }
     ) {
@@ -141,7 +190,8 @@ fun FullScreenEarningScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 32.dp, vertical = 24.dp),
+                .padding(horizontal = 32.dp, vertical = 24.dp)
+                .graphicsLayer { translationX = shiftX.value; translationY = shiftY.value },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -154,7 +204,7 @@ fun FullScreenEarningScreen(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.5.sp,
-                    color = Color(0xFFF28B82)
+                    color = Color(0xFFF28B82).copy(alpha = 0.7f)
                 )
             }
 
@@ -270,6 +320,7 @@ fun FullScreenEarningScreen(
         HudClock(
             color = textSecondaryColor,
             modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 18.dp)
+                .graphicsLayer { translationX = shiftX.value * 0.4f; translationY = shiftY.value * 0.4f }
         )
 
         // Bottom-Right: last sync
@@ -277,6 +328,7 @@ fun FullScreenEarningScreen(
             lastSyncMs = lastSyncMs,
             color = textSecondaryColor,
             modifier = Modifier.align(Alignment.BottomEnd).padding(horizontal = 24.dp, vertical = 18.dp)
+                .graphicsLayer { translationX = shiftX.value * 0.4f; translationY = shiftY.value * 0.4f }
         )
 
         // Celebration Confetti Layer (Bursts on revenue changes)
@@ -284,11 +336,37 @@ fun FullScreenEarningScreen(
             triggerKey = celebrationTrigger.takeIf { it > 0 },
             particleCount = 140
         )
+
+        // Burn-in dim / refresh overlay (no click handler, so taps pass through to the root)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    alpha = maxOf(1f - brightness, refresh.value).coerceIn(0f, 1f)
+                }
+                .background(Color.Black)
+        )
     }
 }
 
 
 private fun nowMs() = kotlin.time.Clock.System.now().toEpochMilliseconds()
+
+// Burn-in protection tuning
+private val BURN_IN_MAX_SHIFT = 16.dp
+private const val BURN_IN_SHIFT_INTERVAL_MS = 90_000L
+private const val IDLE_DIM_AFTER_MS = 10 * 60_000L
+private const val IDLE_DIM_BRIGHTNESS = 0.55f
+private const val NIGHT_DIM_BRIGHTNESS = 0.3f
+private const val NIGHT_START_HOUR = 23
+private const val NIGHT_END_HOUR = 7
+private const val REFRESH_INTERVAL_MS = 60 * 60_000L
+
+private fun isNightHour(ms: Long): Boolean {
+    val hour = kotlin.time.Instant.fromEpochMilliseconds(ms)
+        .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).hour
+    return hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR
+}
 
 private fun formatClock(ms: Long): String {
     val t = kotlin.time.Instant.fromEpochMilliseconds(ms)
@@ -306,7 +384,7 @@ private fun HudClock(color: Color, modifier: Modifier = Modifier) {
     }
     Text(
         text = formatClock(now),
-        fontSize = 20.sp,
+        fontSize = 22.sp,
         fontWeight = FontWeight.SemiBold,
         color = color,
         modifier = modifier
