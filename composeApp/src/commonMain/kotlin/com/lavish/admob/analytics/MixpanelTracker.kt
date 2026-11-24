@@ -33,6 +33,8 @@ import kotlinx.serialization.json.buildJsonObject
 
 /**
  * Mixpanel analytics client for Kotlin Multiplatform (Android, Desktop JVM, iOS).
+ * Note: Mixpanel logging and tracking is enabled only on mobile platforms (Android and iOS).
+ * On Desktop mode, all tracking, profile engagement, and Mixpanel logs are disabled.
  * Securely uses the generated MixpanelConfig.TOKEN (never hardcoded in version control).
  */
 class MixpanelTracker(
@@ -47,13 +49,22 @@ class MixpanelTracker(
             requestTimeoutMillis = 20_000
             connectTimeoutMillis = 10_000
         }
-    }
+    },
+    private val isPlatformEnabled: Boolean = isMixpanelSupported()
 ) {
     // ---- Batched event queue: bounded, flushed every FLUSH_INTERVAL_MS or when BATCH_SIZE is reached ----
     private val queueLock = Mutex()
     private val queue = ArrayDeque<JsonObject>()
     @kotlin.concurrent.Volatile private var flushLoop: Job? = null
     private val flushLock = Mutex()
+
+    /** Returns true if this platform supports Mixpanel tracking (Android and iOS). */
+    val isSupportedOnPlatform: Boolean
+        get() = isPlatformEnabled
+
+    /** Returns true if Mixpanel tracking is supported on this platform and has a configured token. */
+    val isEnabled: Boolean
+        get() = isPlatformEnabled && token.isNotBlank()
 
     companion object {
         private const val KEY_DISTINCT_ID = "solarad_mixpanel_distinct_id"
@@ -102,7 +113,7 @@ class MixpanelTracker(
         settings?.putString(KEY_DISTINCT_ID, cleanUserId)
         settings?.putBoolean(KEY_IS_IDENTIFIED, true)
 
-        if (token.isBlank()) return
+        if (!isPlatformEnabled || token.isBlank()) return
 
         // If previously anonymous, track $identify to alias and preserve history
         if (wasAnonymous && previousAnonId.isNotBlank() && previousAnonId != cleanUserId) {
@@ -124,6 +135,7 @@ class MixpanelTracker(
      * Set or update Mixpanel People / User Profile properties.
      */
     fun setUserProfile(properties: Map<String, Any?>) {
+        if (!isPlatformEnabled) return
         if (token.isBlank()) {
             println("[Mixpanel] Token not configured. Skipping user profile update.")
             return
@@ -164,6 +176,7 @@ class MixpanelTracker(
      * Track a specific event with properties.
      */
     fun track(eventName: String, properties: Map<String, Any?> = emptyMap()) {
+        if (!isPlatformEnabled) return
         if (token.isBlank()) {
             println("[Mixpanel] Token not configured. Event '$eventName' skipped.")
             return
@@ -190,6 +203,7 @@ class MixpanelTracker(
     }
 
     private fun enqueue(event: JsonObject) {
+        if (!isPlatformEnabled) return
         scope.launch {
             val size = queueLock.withLock {
                 queue.addLast(event)
@@ -202,7 +216,7 @@ class MixpanelTracker(
     }
 
     private fun ensureFlushLoop() {
-        if (flushLoop?.isActive == true) return
+        if (!isPlatformEnabled || flushLoop?.isActive == true) return
         flushLoop = scope.launch {
             while (isActive) {
                 delay(FLUSH_INTERVAL_MS)
@@ -213,10 +227,12 @@ class MixpanelTracker(
 
     /** Sends all queued events now (call when the app goes to background). Safe to call from any thread. */
     fun flush() {
+        if (!isPlatformEnabled) return
         scope.launch { flushNow() }
     }
 
     private suspend fun flushNow(): Unit = flushLock.withLock {
+        if (!isPlatformEnabled) return@withLock
         while (true) {
             val batch = queueLock.withLock {
                 if (queue.isEmpty()) return@withLock emptyList()

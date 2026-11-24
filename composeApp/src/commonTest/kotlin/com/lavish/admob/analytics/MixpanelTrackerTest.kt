@@ -145,4 +145,50 @@ class MixpanelTrackerTest {
             topEarningAppName = "SolarAd Pro"
         )
     }
+
+    @Test
+    fun testDesktopPlatformDisablesMixpanelTracking() {
+        // Under JVM/Desktop test runtime, isMixpanelSupported() should evaluate to false
+        assertFalse(isMixpanelSupported(), "Desktop JVM platform should not support Mixpanel tracking")
+
+        val settings = MapSettings()
+        val defaultTracker = MixpanelTracker(
+            token = "test_token_123",
+            settings = settings
+        )
+
+        assertFalse(defaultTracker.isSupportedOnPlatform, "Default tracker on Desktop should have isSupportedOnPlatform = false")
+        assertFalse(defaultTracker.isEnabled, "Default tracker on Desktop should have isEnabled = false")
+
+        // Tracking on disabled platform safely skips execution without crashing or throwing
+        defaultTracker.track("Test Event", mapOf("foo" to "bar"))
+        defaultTracker.setUserProfile(mapOf("test_prop" to 123))
+        defaultTracker.flush()
+    }
+
+    @Test
+    fun testExplicitlyEnabledTrackerIsActive() {
+        val settings = MapSettings()
+        val enabledTracker = MixpanelTracker(
+            token = "test_token_123",
+            settings = settings,
+            isPlatformEnabled = true
+        )
+
+        assertTrue(enabledTracker.isSupportedOnPlatform, "Tracker with isPlatformEnabled=true should be supported")
+        assertTrue(enabledTracker.isEnabled, "Tracker with isPlatformEnabled=true and non-blank token should be enabled")
+    }
+
+    @Test
+    fun testTrackerWithBlankTokenIsNotEnabledEvenIfPlatformSupported() {
+        val settings = MapSettings()
+        val trackerNoToken = MixpanelTracker(
+            token = "",
+            settings = settings,
+            isPlatformEnabled = true
+        )
+
+        assertTrue(trackerNoToken.isSupportedOnPlatform)
+        assertFalse(trackerNoToken.isEnabled, "Tracker with blank token should not be enabled")
+    }
 }

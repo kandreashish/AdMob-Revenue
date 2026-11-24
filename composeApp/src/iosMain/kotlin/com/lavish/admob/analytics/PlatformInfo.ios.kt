@@ -9,3 +9,5 @@ actual fun getPlatformName(): String {
 }
 
 actual fun generateRandomId(): String = NSUUID().UUIDString()
+
+actual fun isMixpanelSupported(): Boolean = true
