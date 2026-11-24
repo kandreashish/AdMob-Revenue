@@ -65,15 +65,19 @@ compose.desktop {
 val prepareRaspberryPiLibs by tasks.registering(Sync::class) {
     dependsOn("jvmJar")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    val jvmRuntimeClasspath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles
+    val jvmRuntimeClasspath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles.filter { file ->
+        val path = file.absolutePath
+        // Exclude non-ARM64 native libraries from Raspberry Pi package
+        !path.contains("skiko-awt-runtime-macos") &&
+        !path.contains("skiko-awt-runtime-linux-x64") &&
+        !path.contains("skiko-awt-runtime-windows") &&
+        // Exclude empty JetBrains redirection shims so real AndroidX JARs with actual classes are packaged
+        !path.contains("org.jetbrains.androidx.lifecycle") &&
+        !path.contains("org.jetbrains.androidx.savedstate")
+    }
     val jvmJar = tasks.named("jvmJar", org.gradle.jvm.tasks.Jar::class)
 
-    from(jvmRuntimeClasspath) {
-        // Exclude non-ARM64 native libraries from Raspberry Pi package
-        exclude("**/skiko-awt-runtime-macos-*")
-        exclude("**/skiko-awt-runtime-linux-x64-*")
-        exclude("**/skiko-awt-runtime-windows-*")
-    }
+    from(jvmRuntimeClasspath)
     from(jvmJar.map { it.archiveFile })
     into(layout.buildDirectory.dir("pi-libs"))
 }
