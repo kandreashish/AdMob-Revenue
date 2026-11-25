@@ -480,10 +480,7 @@ fun App(
                                 val reportRows by repository.reportRows.collectAsState()
                                 val summary by repository.accountSummary.collectAsState()
                                 val reportApps by repository.allApps.collectAsState()
-                                val hourlyState by repository.hourly.collectAsState()
                                 ReportsScreen(
-                                    hourly = hourlyState,
-                                    onLoadHourly = { repository.loadHourly(it) },
                                     rows = reportRows,
                                     apps = reportApps,
                                     today = remember(reportRows, summary.lastSyncTime) { repository.accountToday() },

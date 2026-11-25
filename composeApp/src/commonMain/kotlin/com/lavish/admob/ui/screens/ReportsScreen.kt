@@ -72,9 +72,6 @@ import com.lavish.admob.theme.SolarAmber
 import com.lavish.admob.theme.SolarTheme
 import com.lavish.admob.model.AppMonetization
 import com.lavish.admob.data.ReportLine
-import com.lavish.admob.data.HourlyState
-import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.minus
 import com.lavish.admob.ui.components.AppIcon
 import com.lavish.admob.ui.components.ShimmerTable
 import com.lavish.admob.ui.components.SolarHeader
@@ -83,7 +80,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.toLocalDateTime
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
@@ -103,9 +99,7 @@ fun ReportsScreen(
     isOffline: Boolean = false,
     onProfileClick: () -> Unit,
     onReportChanged: (String, String) -> Unit = { _, _ -> },
-    onExported: (Int) -> Unit = {},
-    hourly: HourlyState = HourlyState.Idle,
-    onLoadHourly: (Boolean) -> Unit = {}
+    onExported: (Int) -> Unit = {}
 ) {
     var rangeName by rememberSaveable { mutableStateOf(ReportDateRange.LAST_7_DAYS.name) }
     // Selected dimensions in the order they were picked (comma-joined so it survives config changes)
@@ -768,57 +762,4 @@ internal fun formatMetric(m: ReportMetric, v: Double, symbol: String, requestDat
     ReportMetric.REQUESTS, ReportMetric.MATCHED_REQUESTS -> if (requestData) groupThousands(v.roundToLong()) else "—"
     ReportMetric.CTR -> "${formatAmount(v)}%"
     ReportMetric.IMPRESSIONS, ReportMetric.CLICKS -> groupThousands(v.roundToLong())
-}
-
-
-@Composable
-private fun HourlyCard(hourly: HourlyState, currencySymbol: String, onLoad: (Boolean) -> Unit) {
-    LaunchedEffect(Unit) { onLoad(false) }
-    var showYesterday by rememberSaveable { mutableStateOf(false) }
-    val localToday = remember { kotlin.time.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date }
-    val day = if (showYesterday) localToday.minus(1, DateTimeUnit.DAY) else localToday
-
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Hourly earnings", fontSize = 14.sp, fontWeight = FontWeight.Medium,
-                color = SolarTheme.colors.textPrimary, modifier = Modifier.weight(1f))
-            ReportChip("Today", !showYesterday) { showYesterday = false }
-            Spacer(Modifier.width(6.dp))
-            ReportChip("Yesterday", showYesterday) { showYesterday = true }
-        }
-        Spacer(Modifier.height(12.dp))
-        when (hourly) {
-            HourlyState.Idle, HourlyState.Loading -> Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) {
-                Text("Loading hourly data…", fontSize = 13.sp, color = SolarTheme.colors.textSecondary)
-            }
-            is HourlyState.Unavailable -> Column {
-                Text(hourly.reason, fontSize = 13.sp, color = SolarTheme.colors.textSecondary)
-                Spacer(Modifier.height(6.dp))
-                Text("Retry", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = SolarAmber,
-                    modifier = Modifier.clickable { onLoad(true) })
-            }
-            is HourlyState.Ready -> {
-                val values = remember(hourly, day) {
-                    val byHour = hourly.points.filter { it.date == day }.associateBy { it.hour }
-                    (0..23).map { byHour[it]?.earnings ?: 0.0 }
-                }
-                val labels = remember { (0..23).map { h -> if (h == 0) "12a" else if (h < 12) "${h}a" else if (h == 12) "12p" else "${h - 12}p" } }
-                val total = values.sum()
-                val peak = values.indices.maxByOrNull { values[it] } ?: 0
-                Text("$currencySymbol${formatAmount(total)}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = SolarTheme.colors.textPrimary)
-                if (total > 0) Text("Best hour: ${labels[peak]} ($currencySymbol${formatAmount(values[peak])})",
-                    fontSize = 12.sp, color = SolarTheme.colors.textSecondary)
-                Spacer(Modifier.height(10.dp))
-                if (total == 0.0) {
-                    Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) {
-                        Text("No hourly data yet", fontSize = 13.sp, color = SolarTheme.colors.textSecondary)
-                    }
-                } else {
-                    BarChart(values = values, labels = labels, modifier = Modifier.fillMaxWidth().height(140.dp))
-                }
-                Spacer(Modifier.height(6.dp))
-                Text("Local time · last 2 hours may be incomplete", fontSize = 11.sp, color = SolarTheme.colors.textSecondary)
-            }
-        }
-    }
 }

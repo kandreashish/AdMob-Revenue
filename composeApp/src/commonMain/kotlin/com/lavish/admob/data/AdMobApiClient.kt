@@ -256,43 +256,6 @@ class AdMobApiClient(
     }
 
     /**
-     * Hourly earnings via the alpha Ads Activity Report (the only AdMob API surface with HOUR).
-     * HOUR is in PST and limited to the last 28 days. Google says this alpha is unsupported, so
-     * callers must treat failure as "hourly not available" rather than an error.
-     */
-    suspend fun fetchHourlyReportRaw(
-        accessToken: String,
-        accountName: String,
-        start: LocalDate,
-        end: LocalDate
-    ): Result<String> = runCatching {
-        val normalizedName = if (accountName.startsWith("accounts/")) accountName else "accounts/$accountName"
-        val requestBody = """
-        {
-          "reportSpec": {
-            "dateRange": {
-              "startDate": { "year": ${start.year}, "month": ${start.month.number}, "day": ${start.day} },
-              "endDate": { "year": ${end.year}, "month": ${end.month.number}, "day": ${end.day} }
-            },
-            "dimensions": ["DATE", "HOUR"],
-            "metrics": ["ESTIMATED_EARNINGS", "IMPRESSIONS"]
-          }
-        }
-        """.trimIndent()
-        val url = "https://admob.googleapis.com/v1alpha/$normalizedName/adsActivityReport:generate"
-        logAdMob("HourlyReport:Request", "URL=$url | Body=$requestBody")
-        val response = httpClient.post(url) {
-            header("Authorization", "Bearer $accessToken")
-            contentType(ContentType.Application.Json)
-            setBody(requestBody)
-        }
-        val bodyText = response.bodyAsText()
-        logAdMob("HourlyReport:Response", "HTTP ${response.status.value} -> ${bodyText.take(500)}")
-        if (response.status.isSuccess()) bodyText
-        else throw Exception("HTTP ${response.status.value}: ${bodyText.take(300)}")
-    }
-
-    /**
      * Calls AdMob Mediation Reporting API to fetch full earnings across all ad sources
      * (Mediation, Bidding partners, and AdMob Network). This matches the AdMob Web Dashboard.
      */

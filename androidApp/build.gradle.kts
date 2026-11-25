@@ -76,7 +76,7 @@ android {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            resValue("string", "app_name", "AdDash")
+            resValue("string", "app_name", "AdDash Dev")
         }
     }
 

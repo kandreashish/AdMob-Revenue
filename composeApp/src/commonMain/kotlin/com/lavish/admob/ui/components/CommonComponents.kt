@@ -109,16 +109,6 @@ fun SolarHeader(
         Column(
             modifier = Modifier.weight(1f, fill = false)
         ) {
-            if (version != null) {
-                Text(
-                    text = version,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Normal,
-                    letterSpacing = 0.5.sp,
-                    color = SolarTheme.colors.textSecondary.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-            }
             Text(
                 text = title,
                 fontSize = 20.sp,
@@ -159,22 +149,38 @@ fun SolarHeader(
             }
         }
 
-        if (onAccountClick != null) {
-            Surface(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .border(1.dp, SolarTheme.colors.borderMedium, CircleShape)
-                    .clickable { onAccountClick() },
-                color = SolarTheme.colors.surface,
-                shadowElevation = 1.dp
+        if (onAccountClick != null || version != null) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                UserProfileAvatar(
-                    avatarUrl = avatarUrl,
-                    userName = accountName ?: "",
-                    modifier = Modifier.fillMaxSize(),
-                    iconSize = 20.dp
-                )
+                if (onAccountClick != null) {
+                    Surface(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, SolarTheme.colors.borderMedium, CircleShape)
+                            .clickable { onAccountClick() },
+                        color = SolarTheme.colors.surface,
+                        shadowElevation = 1.dp
+                    ) {
+                        UserProfileAvatar(
+                            avatarUrl = avatarUrl,
+                            userName = accountName ?: "",
+                            modifier = Modifier.fillMaxSize(),
+                            iconSize = 20.dp
+                        )
+                    }
+                }
+                if (version != null) {
+                    if (onAccountClick != null) Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = version,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Normal,
+                        letterSpacing = 0.4.sp,
+                        color = SolarTheme.colors.textSecondary.copy(alpha = 0.5f)
+                    )
+                }
             }
         }
     }
