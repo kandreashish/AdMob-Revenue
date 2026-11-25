@@ -1,6 +1,14 @@
 package com.lavish.admob.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import com.lavish.admob.platform.PlatformSlots
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -57,7 +65,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
@@ -376,7 +393,7 @@ fun TodayScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(5.dp))
-                            // Same tiers as the earnings bubble (light tints for contrast on the blue card)
+                            // Same tiers as the earnings bubble (light tints for contrast on the dark card)
                             val p = targetSummary.dailyGoalProgress
                             val progressColor = when {
                                 p >= 1f -> Color(0xFF81C995)     // goal hit: green
@@ -384,15 +401,13 @@ fun TodayScreen(
                                 p >= 0.33f -> Color(0xFFFDD663)  // halfway: amber
                                 else -> Color(0xFFF28B82)        // behind: red
                             }
-                            LinearProgressIndicator(
-                                progress = { targetSummary.dailyGoalProgress.coerceIn(0f, 1f) },
+                            AnimatedGradientProgressBar(
+                                progress = p.coerceIn(0f, 1f),
+                                baseColor = progressColor,
+                                trackColor = Color.White.copy(alpha = 0.2f),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(6.dp)
-                                    .clip(RoundedCornerShape(999.dp)),
-                                color = progressColor,
-                                trackColor = Color.White.copy(alpha = 0.2f),
-                                strokeCap = StrokeCap.Round
                             )
                         }
                     }
@@ -727,4 +742,80 @@ fun TodayScreen(
             }
         )
     }
+}
+
+@Composable
+private fun AnimatedGradientProgressBar(
+    progress: Float,
+    baseColor: Color,
+    trackColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "goalProgressFill"
+    )
+    // Skip infinite frame invalidation when there is no progress fill to shimmer.
+    val shimmerPhase = if (animatedProgress > 0f) {
+        val transition = rememberInfiniteTransition(label = "goalProgressShimmer")
+        transition.animateFloat(
+            initialValue = -0.35f,
+            targetValue = 1.35f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1_800, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "goalProgressPhase"
+        )
+    } else {
+        null
+    }
+    val fillPath = remember { Path() }
+
+    Spacer(
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .drawWithCache {
+                val corner = CornerRadius(size.height / 2f, size.height / 2f)
+                val band = (size.width * 0.25f).coerceAtLeast(size.height * 4f)
+                // Cached once per size/color change — zero Brush/List/Shader allocations per frame.
+                val shimmerBrush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color.White.copy(alpha = 0.55f),
+                        Color.Transparent
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(band * 2f, 0f)
+                )
+                onDrawBehind {
+                    drawRoundRect(
+                        color = trackColor,
+                        size = size,
+                        cornerRadius = corner
+                    )
+                    val p = animatedProgress
+                    val fillWidth = (size.width * p).coerceAtLeast(if (p > 0f) size.height else 0f)
+                    if (fillWidth > 0f) {
+                        fillPath.reset()
+                        fillPath.addRoundRect(RoundRect(0f, 0f, fillWidth, size.height, corner))
+                        clipPath(fillPath) {
+                            drawRect(
+                                color = baseColor,
+                                size = Size(fillWidth, size.height)
+                            )
+                            val phase = shimmerPhase?.value ?: 0f
+                            val startX = phase * fillWidth - band
+                            translate(left = startX, top = 0f) {
+                                drawRect(
+                                    brush = shimmerBrush,
+                                    size = Size(band * 2f, size.height)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+    )
 }

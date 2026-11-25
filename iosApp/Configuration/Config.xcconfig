@@ -6,7 +6,7 @@
 TEAM_ID = U7D25F24CQ
 PRODUCT_BUNDLE_IDENTIFIER = com.lavish.admob
 MARKETING_VERSION = 0.1.0
-CURRENT_PROJECT_VERSION = 10
+CURRENT_PROJECT_VERSION = 11
 
 // e.g. 623789927018-xxxxxxxx.apps.googleusercontent.com
 GID_CLIENT_ID = REPLACE_ME.apps.googleusercontent.com

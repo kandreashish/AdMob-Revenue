@@ -44,10 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -165,15 +168,64 @@ fun FullScreenEarningScreen(
         }
     }
 
+    val bgTransition = rememberInfiniteTransition(label = "hudGradient")
+    val gradAngle = bgTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2.0 * kotlin.math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 16_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "hudGradAngle"
+    )
+    val gradPulse = bgTransition.animateFloat(
+        initialValue = 0.78f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 7_500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "hudGradPulse"
+    )
+    val glowAlpha = bgTransition.animateFloat(
+        initialValue = 0.65f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 9_000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "hudGradAlpha"
+    )
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(navyCenter, navyEdge),
-                    radius = 1400f
+            .drawWithCache {
+                val baseRadius = maxOf(size.width, size.height).coerceAtLeast(1f)
+                val glowBrush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF1F3356), Color.Transparent),
+                    center = Offset.Zero,
+                    radius = baseRadius
                 )
-            )
+                onDrawBehind {
+                    drawRect(color = navyEdge)
+                    val angle = gradAngle.value.toDouble()
+                    val cx = size.width * (0.5f + 0.14f * kotlin.math.cos(angle).toFloat())
+                    val cy = size.height * (0.5f + 0.12f * kotlin.math.sin(angle).toFloat())
+                    val pulse = gradPulse.value
+                    withTransform({
+                        translate(left = cx, top = cy)
+                        scale(scaleX = pulse, scaleY = pulse, pivot = Offset.Zero)
+                    }) {
+                        drawCircle(
+                            brush = glowBrush,
+                            radius = baseRadius,
+                            center = Offset.Zero,
+                            alpha = glowAlpha.value
+                        )
+                    }
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null

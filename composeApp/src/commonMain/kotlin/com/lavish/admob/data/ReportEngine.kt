@@ -3,6 +3,7 @@ package com.lavish.admob.data
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
+import kotlinx.serialization.Serializable
 import kotlin.math.roundToLong
 
 /**
@@ -96,6 +97,17 @@ data class ReportLine(
     val totals: ReportTotals,
     /** One label per dimension in [ReportQuery.dimensions] (same order). */
     val labels: List<String> = listOf(label)
+)
+
+@Serializable
+data class ReportPreferences(
+    val rangeName: String = ReportDateRange.LAST_7_DAYS.name,
+    val dimensionNames: String = ReportDimension.DATE.name,
+    val sortMetricName: String? = null,
+    val sortDescending: Boolean = true,
+    val chartMetricName: String = ReportMetric.EARNINGS.name,
+    val appFilter: String? = null,
+    val formatFilter: String? = null
 )
 
 data class ReportQuery(

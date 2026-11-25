@@ -680,4 +680,29 @@ class AdMobRepositoryTest {
         assertEquals(TimeRange.LAST_7_DAYS, repo.selectedTimeRange.value)
         assertEquals(200.0, repo.accountSummary.value.todayRevenue)
     }
+
+    @Test
+    fun testReportPreferencesPersistenceAndLogoutReset() {
+        val settings = MapSettings()
+        val repo1 = AdMobRepository(settings = settings, cacheFiles = null)
+        val saved = com.lavish.admob.data.ReportPreferences(
+            rangeName = "LAST_30_DAYS",
+            dimensionNames = "APP,COUNTRY",
+            sortMetricName = "IMPRESSIONS",
+            sortDescending = false,
+            chartMetricName = "ECPM",
+            appFilter = "app-123",
+            formatFilter = "BANNER"
+        )
+        repo1.setReportPreferences(saved)
+        assertEquals(saved, repo1.reportPreferences.value)
+
+        // New repo instance with same settings restores the report preferences
+        val repo2 = AdMobRepository(settings = settings, cacheFiles = null)
+        assertEquals(saved, repo2.reportPreferences.value)
+
+        // Logout clears report preferences back to defaults
+        repo2.logout()
+        assertEquals(com.lavish.admob.data.ReportPreferences(), repo2.reportPreferences.value)
+    }
 }

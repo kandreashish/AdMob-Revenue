@@ -72,6 +72,7 @@ import com.lavish.admob.theme.SolarAmber
 import com.lavish.admob.theme.SolarTheme
 import com.lavish.admob.model.AppMonetization
 import com.lavish.admob.data.ReportLine
+import com.lavish.admob.data.ReportPreferences
 import com.lavish.admob.ui.components.AppIcon
 import com.lavish.admob.ui.components.ShimmerTable
 import com.lavish.admob.ui.components.SolarHeader
@@ -97,33 +98,49 @@ fun ReportsScreen(
     accountName: String = "My AdMob",
     avatarUrl: String? = null,
     isOffline: Boolean = false,
+    initialPreferences: ReportPreferences = ReportPreferences(),
+    onPreferencesChanged: (ReportPreferences) -> Unit = {},
     onProfileClick: () -> Unit,
     onReportChanged: (String, String) -> Unit = { _, _ -> },
     onExported: (Int) -> Unit = {}
 ) {
-    var rangeName by rememberSaveable { mutableStateOf(ReportDateRange.LAST_7_DAYS.name) }
+    var rangeName by rememberSaveable { mutableStateOf(initialPreferences.rangeName) }
     // Selected dimensions in the order they were picked (comma-joined so it survives config changes)
-    var dimensionNames by rememberSaveable { mutableStateOf(ReportDimension.DATE.name) }
-    var sortMetricName by rememberSaveable { mutableStateOf<String?>(null) }
-    var sortDescending by rememberSaveable { mutableStateOf(true) }
-    var chartMetricName by rememberSaveable { mutableStateOf(ReportMetric.EARNINGS.name) }
-    var appFilter by rememberSaveable { mutableStateOf<String?>(null) }
-    var formatFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var dimensionNames by rememberSaveable { mutableStateOf(initialPreferences.dimensionNames) }
+    var sortMetricName by rememberSaveable { mutableStateOf(initialPreferences.sortMetricName) }
+    var sortDescending by rememberSaveable { mutableStateOf(initialPreferences.sortDescending) }
+    var chartMetricName by rememberSaveable { mutableStateOf(initialPreferences.chartMetricName) }
+    var appFilter by rememberSaveable { mutableStateOf(initialPreferences.appFilter) }
+    var formatFilter by rememberSaveable { mutableStateOf(initialPreferences.formatFilter) }
     var copied by remember { mutableStateOf(false) }
     var showCtrInfo by remember { mutableStateOf(false) }
 
+    val currentPreferences = ReportPreferences(
+        rangeName = rangeName,
+        dimensionNames = dimensionNames,
+        sortMetricName = sortMetricName,
+        sortDescending = sortDescending,
+        chartMetricName = chartMetricName,
+        appFilter = appFilter,
+        formatFilter = formatFilter
+    )
+    LaunchedEffect(currentPreferences) {
+        onPreferencesChanged(currentPreferences)
+    }
+
     if (showCtrInfo) CtrWarningDialog(onDismiss = { showCtrInfo = false })
 
-    val range = ReportDateRange.valueOf(rangeName)
-    val dimensions = dimensionNames.split(',').filter { it.isNotBlank() }.map { ReportDimension.valueOf(it) }
+    val range = runCatching { ReportDateRange.valueOf(rangeName) }.getOrDefault(ReportDateRange.LAST_7_DAYS)
+    val dimensions = dimensionNames.split(',').filter { it.isNotBlank() }
+        .mapNotNull { runCatching { ReportDimension.valueOf(it) }.getOrNull() }
         .ifEmpty { listOf(ReportDimension.DATE) }
     val dimension = dimensions.first()
     val dateOnly = dimensions == listOf(ReportDimension.DATE)
-    val chartMetric = ReportMetric.valueOf(chartMetricName)
+    val chartMetric = runCatching { ReportMetric.valueOf(chartMetricName) }.getOrDefault(ReportMetric.EARNINGS)
     val query = ReportQuery(
         dateRange = range,
         dimension = dimension,
-        sortMetric = sortMetricName?.let { ReportMetric.valueOf(it) },
+        sortMetric = sortMetricName?.let { name -> runCatching { ReportMetric.valueOf(name) }.getOrNull() },
         sortDescending = sortDescending,
         appFilter = appFilter,
         formatFilter = formatFilter,

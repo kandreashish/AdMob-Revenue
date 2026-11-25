@@ -480,6 +480,7 @@ fun App(
                                 val reportRows by repository.reportRows.collectAsState()
                                 val summary by repository.accountSummary.collectAsState()
                                 val reportApps by repository.allApps.collectAsState()
+                                val reportPreferences by repository.reportPreferences.collectAsState()
                                 ReportsScreen(
                                     rows = reportRows,
                                     apps = reportApps,
@@ -489,6 +490,8 @@ fun App(
                                     accountName = currentAccountName,
                                     avatarUrl = session.avatarUrl,
                                     isOffline = isOffline,
+                                    initialPreferences = reportPreferences,
+                                    onPreferencesChanged = { repository.setReportPreferences(it) },
                                     onProfileClick = {
                                         tracker.trackModalOpened("User Profile Modal", triggerSource = "reports_avatar")
                                         showProfileDialog = true

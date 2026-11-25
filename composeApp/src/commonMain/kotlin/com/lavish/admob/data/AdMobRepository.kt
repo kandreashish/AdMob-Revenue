@@ -59,6 +59,7 @@ class AdMobRepository(
         private const val KEY_REPORTING_TZ = "solarad_reporting_timezone"
         private const val KEY_CACHE_ROWS_HASH = "solarad_cache_report_rows_hash"
         private const val KEY_CACHE_REG_APPS_HASH = "solarad_cache_registered_apps_hash"
+        private const val KEY_REPORT_PREFERENCES = "solarad_report_preferences"
     }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
@@ -227,6 +228,11 @@ class AdMobRepository(
         )
     )
     val autoRefreshInterval: StateFlow<AutoRefreshInterval> = _autoRefreshInterval.asStateFlow()
+
+    private val _reportPreferences = MutableStateFlow(
+        loadCachedObject<ReportPreferences>(KEY_REPORT_PREFERENCES) { ReportPreferences() }
+    )
+    val reportPreferences: StateFlow<ReportPreferences> = _reportPreferences.asStateFlow()
 
     private val _themeMode = MutableStateFlow(
         ThemeMode.fromString(settings?.getStringOrNull(KEY_THEME_MODE))
@@ -464,6 +470,14 @@ class AdMobRepository(
         _themeMode.value = mode
         settings?.putString(KEY_THEME_MODE, mode.name)
         tracker.trackThemeChanged(mode.name)
+    }
+
+    fun setReportPreferences(prefs: ReportPreferences) {
+        if (_reportPreferences.value == prefs) return
+        _reportPreferences.value = prefs
+        try {
+            settings?.putString(KEY_REPORT_PREFERENCES, json.encodeToString(prefs))
+        } catch (_: Exception) {}
     }
 
     fun updateAvatarUrl(avatarUrl: String) {
@@ -852,8 +866,10 @@ class AdMobRepository(
             remove(KEY_CUSTOM_DAILY_GOAL)
             remove(KEY_REFRESH_TOKEN)
             remove(KEY_REPORTING_TZ)
+            remove(KEY_REPORT_PREFERENCES)
         }
         _customDailyGoal.value = null
+        _reportPreferences.value = ReportPreferences()
         _session.value = UserSession(
             isLoggedIn = false,
             userName = "",
