@@ -62,8 +62,8 @@ class EarningsBubbleService : Service() {
         private const val KEY_Y = "bubble_y"
         private const val KEY_ENABLED = "bubble_enabled"
         const val EXTRA_OPEN_PROMO = "open_bubble_promo"
-        /** Bubble opacity when idle (translucent) vs. while being touched/dragged. */
-        private const val IDLE_ALPHA = 0.6f
+        private const val EXTRA_OPEN_PROMO_VAL = "open_bubble_promo"
+        /** Bubble opacity while being touched/dragged. */
         private const val ACTIVE_ALPHA = 1f
 
         fun start(context: Context) {
@@ -111,6 +111,9 @@ class EarningsBubbleService : Service() {
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private var locked = false
     private var goalProgress: Double? = null
+
+    private fun idleAlpha(): Float =
+        BubbleAlphaPref.toFloat(BubbleAlphaPref.previewPercent.value ?: BubbleAlphaPref.alphaPercent.value)
 
     private fun dp(v: Int): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
@@ -214,10 +217,15 @@ class EarningsBubbleService : Service() {
         // Bubble stays visible at all times, including while the app is open.
         setBubbleVisible(true)
 
-        // Live-resize when the user changes the size in Settings.
+        // Live-resize and live-alpha when the user changes settings.
+        BubbleAlphaPref.init(applicationContext)
         scope.launch {
             combine(BubbleSizePref.diameterDp, BubbleSizePref.previewDp) { saved, preview -> preview ?: saved }
                 .collect { applySize(it) }
+        }
+        scope.launch {
+            combine(BubbleAlphaPref.alphaPercent, BubbleAlphaPref.previewPercent) { saved, preview -> preview ?: saved }
+                .collect { bubble?.alpha = BubbleAlphaPref.toFloat(it) }
         }
         BubbleEntitlementManager.start(applicationContext)
 
@@ -270,14 +278,14 @@ class EarningsBubbleService : Service() {
         val b = bubble ?: return
         b.animate().cancel()
         if (visible) {
-            b.alpha = IDLE_ALPHA
+            b.alpha = idleAlpha()
             b.visibility = View.VISIBLE
         } else {
             hideCloseTarget()
             if (fadeOutMs > 0 && b.visibility == View.VISIBLE) {
                 b.animate().alpha(0f).setDuration(fadeOutMs).withEndAction {
                     b.visibility = View.GONE
-                    b.alpha = IDLE_ALPHA
+                    b.alpha = idleAlpha()
                 }.start()
             } else {
                 b.visibility = View.GONE
@@ -375,7 +383,7 @@ class EarningsBubbleService : Service() {
                 BubbleColors.NO_GOAL
             ).apply { shape = GradientDrawable.OVAL }
             elevation = dp(8).toFloat()
-            alpha = IDLE_ALPHA
+            alpha = idleAlpha()
             addView(contentColumn, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
         }
 
@@ -481,7 +489,7 @@ class EarningsBubbleService : Service() {
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    v.animate().alpha(IDLE_ALPHA).setDuration(300).start()
+                    v.animate().alpha(idleAlpha()).setDuration(300).start()
                     if (dragging) {
                         val close = isOverCloseTarget()
                         hideCloseTarget()

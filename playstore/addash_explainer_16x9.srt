@@ -1,0 +1,315 @@
+1
+00:00:00,700 --> 00:00:03,964
+Checking your AdMob revenue shouldn't mean keeping a
+
+2
+00:00:03,964 --> 00:00:07,228
+browser tab open and hitting refresh all day.
+
+3
+00:00:07,228 --> 00:00:08,452
+Meet AdDash —
+
+4
+00:00:08,452 --> 00:00:09,268
+the live,
+
+5
+00:00:09,268 --> 00:00:12,532
+multi-platform AdMob dashboard built for app developers who
+
+6
+00:00:12,532 --> 00:00:14,980
+want instant numbers at a glance.
+
+7
+00:00:16,830 --> 00:00:20,295
+We all know the routine: open the AdMob website,
+
+8
+00:00:20,295 --> 00:00:22,605
+wait for heavy scripts to load,
+
+9
+00:00:22,605 --> 00:00:25,301
+log back in when your session expires,
+
+10
+00:00:25,301 --> 00:00:28,381
+and mash refresh just to see if today's
+
+11
+00:00:28,381 --> 00:00:29,151
+earnings moved.
+
+12
+00:00:29,151 --> 00:00:30,691
+AdDash solves this completely.
+
+13
+00:00:30,691 --> 00:00:33,386
+It connects directly to your AdMob account,
+
+14
+00:00:33,386 --> 00:00:36,081
+caches your data locally for instant launch,
+
+15
+00:00:36,081 --> 00:00:39,162
+and auto-refreshes in the background every thirty seconds,
+
+16
+00:00:39,162 --> 00:00:39,932
+one minute,
+
+17
+00:00:39,932 --> 00:00:40,702
+two minutes,
+
+18
+00:00:40,702 --> 00:00:42,242
+or five minutes —
+
+19
+00:00:42,242 --> 00:00:43,782
+zero manual reloads required.
+
+20
+00:00:45,830 --> 00:00:48,798
+Need to stay in flow while watching your numbers?
+
+21
+00:00:48,798 --> 00:00:51,436
+Turn on the AdDash Floating Bubble on Android.
+
+22
+00:00:51,436 --> 00:00:54,074
+It stays visible on top of any app
+
+23
+00:00:54,074 --> 00:00:54,734
+you're using,
+
+24
+00:00:54,734 --> 00:00:57,372
+snaps cleanly to the edge of your screen,
+
+25
+00:00:57,372 --> 00:00:58,362
+and updates live.
+
+26
+00:00:58,362 --> 00:01:01,000
+The bubble even shifts color based on your
+
+27
+00:01:01,000 --> 00:01:02,319
+daily goal progress —
+
+28
+00:01:02,319 --> 00:01:02,978
+from red,
+
+29
+00:01:02,978 --> 00:01:03,638
+to amber,
+
+30
+00:01:03,638 --> 00:01:04,298
+to blue,
+
+31
+00:01:04,298 --> 00:01:07,266
+and green the moment you hit one hundred percent.
+
+32
+00:01:07,266 --> 00:01:08,914
+Customize its size and opacity,
+
+33
+00:01:08,914 --> 00:01:11,553
+or drag it to the bottom target anytime
+
+34
+00:01:11,553 --> 00:01:12,542
+to hide it.
+
+35
+00:01:17,830 --> 00:01:21,012
+Want a dedicated display for your desk or
+
+36
+00:01:21,012 --> 00:01:21,807
+studio wall?
+
+37
+00:01:21,807 --> 00:01:23,796
+Switch into AdDash Fullscreen Mode.
+
+38
+00:01:23,796 --> 00:01:24,989
+Designed for tablets,
+
+39
+00:01:24,989 --> 00:01:25,784
+desktop monitors,
+
+40
+00:01:25,784 --> 00:01:26,580
+smart TVs,
+
+41
+00:01:26,580 --> 00:01:28,568
+and even a Raspberry Pi,
+
+42
+00:01:28,568 --> 00:01:31,750
+this deep-navy landscape HUD stays awake with built-in
+
+43
+00:01:31,750 --> 00:01:32,943
+OLED burn-in protection.
+
+44
+00:01:32,943 --> 00:01:35,727
+Every time your live earnings tick upward,
+
+45
+00:01:35,727 --> 00:01:39,307
+the counter bounces with a celebration burst of confetti.
+
+46
+00:01:39,307 --> 00:01:42,488
+Plug in a monitor or mount a TV,
+
+47
+00:01:42,488 --> 00:01:45,670
+and your revenue updates itself all day long.
+
+48
+00:01:51,830 --> 00:01:53,620
+Inside the Today tab,
+
+49
+00:01:53,620 --> 00:01:57,200
+you get an instant pulse on estimated earnings,
+
+50
+00:01:57,200 --> 00:01:58,543
+live trend curves,
+
+51
+00:01:58,543 --> 00:01:58,990
+eCPM,
+
+52
+00:01:58,990 --> 00:01:59,438
+impressions,
+
+53
+00:01:59,438 --> 00:01:59,885
+clicks,
+
+54
+00:01:59,885 --> 00:02:01,228
+and match rate.
+
+55
+00:02:01,228 --> 00:02:03,017
+Switch effortlessly between Today,
+
+56
+00:02:03,017 --> 00:02:03,465
+Yesterday,
+
+57
+00:02:03,465 --> 00:02:04,360
+Seven Days,
+
+58
+00:02:04,360 --> 00:02:05,255
+This Month,
+
+59
+00:02:05,255 --> 00:02:07,045
+or custom date ranges.
+
+60
+00:02:07,045 --> 00:02:10,625
+Set a daily revenue target and track your
+
+61
+00:02:10,625 --> 00:02:13,310
+progress ring alongside your multi-day streak.
+
+62
+00:02:17,830 --> 00:02:21,580
+Every iOS and Android app lives on one
+
+63
+00:02:21,580 --> 00:02:22,518
+clean shelf.
+
+64
+00:02:22,518 --> 00:02:24,393
+Dive into per-app performance,
+
+65
+00:02:24,393 --> 00:02:26,737
+thirty and ninety-day analytics trends,
+
+66
+00:02:26,737 --> 00:02:27,675
+top-earning countries,
+
+67
+00:02:27,675 --> 00:02:29,081
+ad format breakdowns,
+
+68
+00:02:29,081 --> 00:02:30,488
+and hourly reports.
+
+69
+00:02:30,488 --> 00:02:32,832
+And when payout day approaches,
+
+70
+00:02:32,832 --> 00:02:36,582
+the Wallet tab keeps your unpaid balance and
+
+71
+00:02:36,582 --> 00:02:38,926
+full payout history crystal clear.
+
+72
+00:02:42,830 --> 00:02:44,465
+Available across Android,
+
+73
+00:02:44,465 --> 00:02:45,011
+iOS,
+
+74
+00:02:45,011 --> 00:02:45,556
+macOS,
+
+75
+00:02:45,556 --> 00:02:46,101
+Windows,
+
+76
+00:02:46,101 --> 00:02:46,646
+Linux,
+
+77
+00:02:46,646 --> 00:02:48,281
+and Raspberry Pi.
+
+78
+00:02:48,281 --> 00:02:50,462
+Stop refreshing your browser.
+
+79
+00:02:50,462 --> 00:02:54,278
+Download AdDash and watch your revenue live.

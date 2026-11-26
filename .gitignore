@@ -29,14 +29,21 @@ build/
 kotlin-js-store/
 .konan/
 *.konan
+*.kexe
+*.klib
+*.jfr
 
 # Local configuration & environment
 local.properties
 local.settings.json
 *.local
+.env
+.env.local
+.env.*.local
 
 # Android / JVM Build Artifacts & Caches
 .cxx/
+.navigation/
 captures/
 output-metadata.json
 *.apk
@@ -47,6 +54,12 @@ output-metadata.json
 *.hprof
 hs_err_pid*
 replay_pid*
+
+# Fastlane
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots/
+**/fastlane/test_output/
 
 # Packaging & Distribution Artifacts (Desktop / Linux / macOS)
 *.deb
@@ -80,12 +93,19 @@ out/
 .vscode/
 *.code-workspace
 
-# iOS / Xcode
+# iOS / Xcode / SwiftPM
 **/DerivedData/
+.swiftpm/
+.build/
 *.xcuserstate
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
 project.xcworkspace/
 xcuserdata/
 **/xcuserdata/
+*.xcworkspace/xcuserdata/
 *.xcuserdatad
 *.xcscmblueprint
 *.xccheckout
@@ -95,6 +115,21 @@ xcuserdata/
 *.dSYM.zip
 *.hmap
 Pods/
+Carthage/Build/
+
+# Node / Remotion (video/)
+node_modules/
+**/node_modules/
+.remotion/
+
+# Python (scripts/)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Firebase
+.firebase/
 
 # Log files
 *.log

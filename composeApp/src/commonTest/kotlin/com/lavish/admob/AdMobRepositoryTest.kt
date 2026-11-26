@@ -9,6 +9,8 @@ import com.lavish.admob.model.AppMonetization
 import com.lavish.admob.model.AutoRefreshInterval
 import com.lavish.admob.model.TimeRange
 import com.lavish.admob.model.maskPublisherId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -413,7 +415,7 @@ class AdMobRepositoryTest {
         settings.putString("solarad_cache_registered_apps", json.encodeToString(listOf(cachedApp)))
 
         // Instantiate repository without active network token, restoring entirely from offline cache
-        val repo = AdMobRepository(settings = settings, cacheFiles = null)
+        val repo = AdMobRepository(settings = settings, cacheFiles = null, scope = CoroutineScope(Dispatchers.Unconfined))
 
         assertTrue(repo.session.value.isLoggedIn)
         assertEquals("Offline User", repo.session.value.userName)
@@ -440,7 +442,7 @@ class AdMobRepositoryTest {
     @Test
     fun testCustomDailyGoalPersistenceAndRecomputation() {
         val settings = MapSettings()
-        val repo1 = AdMobRepository(settings = settings, cacheFiles = null)
+        val repo1 = AdMobRepository(settings = settings, cacheFiles = null, scope = CoroutineScope(Dispatchers.Unconfined))
 
         // Initially no custom goal set
         assertNull(repo1.customDailyGoal.value)
@@ -453,7 +455,7 @@ class AdMobRepositoryTest {
         assertTrue(repo1.accountSummary.value.isCustomGoal)
 
         // New repo instance with same settings restores the custom goal
-        val repo2 = AdMobRepository(settings = settings, cacheFiles = null)
+        val repo2 = AdMobRepository(settings = settings, cacheFiles = null, scope = CoroutineScope(Dispatchers.Unconfined))
         assertEquals(250.0, repo2.customDailyGoal.value)
         assertEquals(250.0, repo2.accountSummary.value.dailyGoal)
         assertTrue(repo2.accountSummary.value.isCustomGoal)
@@ -557,7 +559,7 @@ class AdMobRepositoryTest {
     @Test
     fun testRepositoryFallbackScalesAcrossTimeRangesWhenOfflineOrEmpty() {
         val settings = MapSettings()
-        val repo = AdMobRepository(settings = settings, cacheFiles = null)
+        val repo = AdMobRepository(settings = settings, cacheFiles = null, scope = CoroutineScope(Dispatchers.Unconfined))
         repo.setCustomDailyGoal(100.0)
 
         // Today default
@@ -666,7 +668,7 @@ class AdMobRepositoryTest {
         settings.putString("solarad_publisher_id", "pub-test")
         settings.putString("solarad_cache_report_rows", json.encodeToString(rows))
 
-        val repo = AdMobRepository(settings = settings, cacheFiles = null)
+        val repo = AdMobRepository(settings = settings, cacheFiles = null, scope = CoroutineScope(Dispatchers.Unconfined))
         // Select Last 7 Days
         repo.setTimeRange(TimeRange.LAST_7_DAYS)
         // 50.0 + 70.0 + 80.0 = 200.0
@@ -704,5 +706,32 @@ class AdMobRepositoryTest {
         // Logout clears report preferences back to defaults
         repo2.logout()
         assertEquals(com.lavish.admob.data.ReportPreferences(), repo2.reportPreferences.value)
+    }
+
+    @Test
+    fun testTodaySummaryIgnoresSelectedTimeRange() {
+        val settings = MapSettings()
+        val json = Json { ignoreUnknownKeys = true }
+        val today = kotlin.time.Clock.System.now()
+            .toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val yesterday = today.minus(1, DateTimeUnit.DAY)
+        fun fmt(d: LocalDate) = d.toString().replace("-", "")
+
+        val rows = listOf(
+            AdMobReportRow(fmt(today), "app1", "Game", "Banner", "US", 60.0, 1000, 20),
+            AdMobReportRow(fmt(yesterday), "app1", "Game", "Banner", "US", 40.0, 800, 15)
+        )
+        settings.putBoolean("solarad_is_logged_in", true)
+        settings.putString("solarad_user_name", "Widget User")
+        settings.putString("solarad_publisher_id", "pub-widget")
+        settings.putString("solarad_cache_report_rows", json.encodeToString(rows))
+
+        val repo = AdMobRepository(settings = settings, cacheFiles = null, scope = CoroutineScope(Dispatchers.Unconfined))
+        repo.setTimeRange(TimeRange.LAST_7_DAYS)
+
+        // accountSummary reflects LAST_7_DAYS (60 + 40 = 100), while todaySummary stays TODAY (60 vs 40 = +50%)
+        assertEquals(100.0, repo.accountSummary.value.todayRevenue)
+        assertEquals(60.0, repo.todaySummary.value.todayRevenue)
+        assertEquals(50.0, repo.todaySummary.value.deltaPercentage)
     }
 }

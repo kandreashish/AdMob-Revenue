@@ -32,6 +32,7 @@ import com.lavish.admob.bubble.EarningsBubbleService
 import com.lavish.admob.crashlytics.AdCrashlytics
 import com.lavish.admob.data.AdMobRepository
 import com.lavish.admob.data.initAndroidSettings
+import com.lavish.admob.lockscreen.LockscreenEarningsNotification
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,6 +61,9 @@ internal object RepositoryHolder {
                                 null
                             }
                         }
+                    }
+                    repo.onTodaySummaryUpdated = { summary, session ->
+                        LockscreenEarningsNotification.updateIfEnabled(app, summary, session)
                     }
                     instance = repo
                 }
@@ -193,6 +197,7 @@ class MainActivity : ComponentActivity() {
             pInfo.versionCode
         }
         val isDebug = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        com.lavish.admob.platform.PlatformSlots.isDebugBuild = isDebug
         AdCrashlytics.init(vName, vCode, isDebug)
 
         // Reuse the process-wide repository (token refresher is wired there with applicationContext)
@@ -215,6 +220,11 @@ class MainActivity : ComponentActivity() {
         BubbleBillingManager.init(applicationContext)
         com.lavish.admob.platform.PlatformSlots.todayBanner = { com.lavish.admob.bubble.BubbleTodayBanner() }
         com.lavish.admob.platform.PlatformSlots.settingsRow = { com.lavish.admob.bubble.BubbleSettingsRow() }
+        lifecycleScope.launch {
+            BubbleEntitlementManager.access.collect { access ->
+                LockscreenEarningsNotification.enforceEntitlement(applicationContext, access)
+            }
+        }
         if (savedInstanceState == null) BubbleLocalPrefs.incrementAppOpens(applicationContext)
         handleBubbleIntent(intent)
 
@@ -269,6 +279,7 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {
                     }
                     EarningsBubbleService.stop(this@MainActivity)
+                    LockscreenEarningsNotification.disable(this@MainActivity)
                     BubbleFirebase.signOut()
                     AdCrashlytics.clearUserId()
                     repository.logout()

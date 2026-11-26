@@ -12,4 +12,7 @@ object PlatformSlots {
 
     /** Row shown in Profile & Settings, above Appearance. */
     var settingsRow: (@Composable () -> Unit)? = null
+
+    /** True when running a debug build (enables debug-only triggers). */
+    var isDebugBuild: Boolean = false
 }

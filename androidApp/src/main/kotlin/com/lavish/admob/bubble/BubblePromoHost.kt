@@ -22,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.lavish.admob.data.AdMobRepository
+import com.lavish.admob.lockscreen.LockscreenEarningsNotification
 import com.lavish.admob.theme.SolarAdTheme
 import com.lavish.admob.ui.utils.formatAmount
 import kotlinx.coroutines.delay
@@ -32,12 +33,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+enum class PromoTarget { BUBBLE, LOCKSCREEN }
+
 /** Lets other entry points (Today banner, Settings row, locked bubble) open the promo on demand. */
 object BubblePromo {
-    private val _manualRequest = MutableStateFlow(false)
-    val manualRequest: StateFlow<Boolean> = _manualRequest.asStateFlow()
-    fun open() { _manualRequest.value = true }
-    internal fun consume() { _manualRequest.value = false }
+    private val _manualRequest = MutableStateFlow<PromoTarget?>(null)
+    val manualRequest: StateFlow<PromoTarget?> = _manualRequest.asStateFlow()
+    fun open(target: PromoTarget = PromoTarget.BUBBLE) { _manualRequest.value = target }
+    internal fun consume() { _manualRequest.value = null }
 }
 
 /** Local app-open counter used for the "show after N opens" rule. */
@@ -56,6 +59,13 @@ object BubbleLocalPrefs {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_TRIAL_ENDED_DISMISSED, false)
     fun dismissTrialEndedBanner(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_TRIAL_ENDED_DISMISSED, true).apply()
+    }
+
+    private const val KEY_OFF_DISMISSED = "bubble_off_banner_dismissed"
+    fun isOffBannerDismissed(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_OFF_DISMISSED, false)
+    fun dismissOffBanner(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_OFF_DISMISSED, true).apply()
     }
 }
 
@@ -87,6 +97,7 @@ fun BubblePromoHost(
     val config = product?.oneTimePurchaseOfferDetails?.formattedPrice
         ?.let { liveConfig.copy(priceLabel = it) } ?: liveConfig
     var showPromo by remember { mutableStateOf(false) }
+    var pendingTarget by remember { mutableStateOf(PromoTarget.BUBBLE) }
     var autoShownThisSession by rememberSaveable { mutableStateOf(false) }
     var isWorking by remember { mutableStateOf(false) }
     var promoCodeError by remember { mutableStateOf<String?>(null) }
@@ -128,6 +139,36 @@ fun BubblePromoHost(
             notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             launchOverlayFlow()
+        }
+    }
+
+    val lockscreenNotifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            LockscreenEarningsNotification.enable(context)
+        } else {
+            Toast.makeText(
+                context,
+                "Notification permission is needed to show earnings on the lockscreen.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    fun enableLockscreenAfterAuth() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            lockscreenNotifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            LockscreenEarningsNotification.enable(context)
+        }
+    }
+
+    fun onEntitledReady() {
+        if (pendingTarget == PromoTarget.LOCKSCREEN) {
+            enableLockscreenAfterAuth()
+        } else {
+            ensureOverlayThenStart()
         }
     }
 
@@ -179,7 +220,8 @@ fun BubblePromoHost(
 
     // ---- Manual open (banner / settings / locked bubble) ----
     LaunchedEffect(manualRequest) {
-        if (!manualRequest) return@LaunchedEffect
+        val target = manualRequest ?: return@LaunchedEffect
+        pendingTarget = target
         BubblePromo.consume()
         // Wait (briefly) for the real state; never show the intro just because we're still loading.
         val known = withTimeoutOrNull(5_000) {
@@ -188,7 +230,7 @@ fun BubblePromoHost(
         when (known) {
             null, BubbleAccess.Loading, BubbleAccess.SignedOut ->
                 Toast.makeText(context, "Still syncing your account. Try again in a moment.", Toast.LENGTH_SHORT).show()
-            BubbleAccess.Unlocked, is BubbleAccess.TrialActive -> ensureOverlayThenStart()
+            BubbleAccess.Unlocked, is BubbleAccess.TrialActive -> onEntitledReady()
             else -> {
                 showPromo = true
                 BubbleFirebase.log(context, BubbleEvents.PROMO_SHOWN, mapOf("source" to "manual"))
@@ -223,7 +265,7 @@ fun BubblePromoHost(
                         BubbleFirebase.log(context, BubbleEvents.TRIAL_STARTED)
                         showPromo = false
                         Toast.makeText(context, "Your ${config.trialLabel} free trial has started!", Toast.LENGTH_SHORT).show()
-                        ensureOverlayThenStart()
+                        onEntitledReady()
                     } else {
                         Toast.makeText(context, "Couldn't start the trial. Check your connection and try again.", Toast.LENGTH_LONG).show()
                     }
@@ -250,8 +292,8 @@ fun BubblePromoHost(
                     when (r) {
                         BubbleEntitlementManager.RedeemResult.Success -> {
                             showPromo = false
-                            Toast.makeText(context, "Promo code applied! Bubble unlocked forever.", Toast.LENGTH_LONG).show()
-                            ensureOverlayThenStart()
+                            Toast.makeText(context, "Promo code applied! Unlocked forever.", Toast.LENGTH_LONG).show()
+                            onEntitledReady()
                         }
                         BubbleEntitlementManager.RedeemResult.InvalidFormat -> promoCodeError = "Enter all 8 digits."
                         BubbleEntitlementManager.RedeemResult.Rejected -> promoCodeError = "This code is invalid or has already been used."

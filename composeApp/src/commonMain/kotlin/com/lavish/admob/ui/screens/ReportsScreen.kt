@@ -74,6 +74,7 @@ import com.lavish.admob.model.AppMonetization
 import com.lavish.admob.data.ReportLine
 import com.lavish.admob.data.ReportPreferences
 import com.lavish.admob.ui.components.AppIcon
+import com.lavish.admob.ui.components.CompactPlatformIcon
 import com.lavish.admob.ui.components.ShimmerTable
 import com.lavish.admob.ui.components.SolarHeader
 import com.lavish.admob.ui.utils.formatAmount
@@ -344,7 +345,11 @@ fun ReportsScreen(
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically) {
                                     if (app != null) {
-                                        AppIcon(app = app, size = 22.dp, showPlatformBadge = true)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            AppIcon(app = app, size = 22.dp, showPlatformBadge = false)
+                                            Spacer(Modifier.width(4.dp))
+                                            CompactPlatformIcon(app = app, size = 13.dp)
+                                        }
                                         Spacer(Modifier.width(8.dp))
                                     }
                                     Text(text, fontSize = 12.sp, color = SolarTheme.colors.textPrimary, maxLines = 1,
@@ -428,8 +433,8 @@ fun ReportsScreen(
 }
 
 private val DIM_COL = 132.dp
-/** App column shows only the icon (names took too much room). */
-private val APP_COL = 52.dp
+/** App column shows the app icon + compact platform icon (names took too much room). */
+private val APP_COL = 60.dp
 
 private fun dimWidth(d: ReportDimension) = if (d == ReportDimension.APP) APP_COL else DIM_COL
 private const val PAGE_SIZE = 50
@@ -533,8 +538,15 @@ private fun TableRow(
         labels.forEachIndexed { i, label ->
             val d = dims.getOrNull(i)
             if (d == ReportDimension.APP && !totalRow) {
-                Box(Modifier.width(APP_COL).padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
-                    if (app != null) AppIcon(app = app, size = 26.dp, showPlatformBadge = true)
+                Row(
+                    modifier = Modifier.width(APP_COL).padding(start = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (app != null) {
+                        AppIcon(app = app, size = 26.dp, showPlatformBadge = false)
+                        Spacer(Modifier.width(4.dp))
+                        CompactPlatformIcon(app = app, size = 14.dp)
+                    }
                 }
                 return@forEachIndexed
             }

@@ -1,0 +1,639 @@
+{
+  "fps": 60,
+  "width": 1920,
+  "height": 1080,
+  "totalDurationSec": 178.13,
+  "totalFrames": 10688,
+  "chapters": [
+    {
+      "id": "01_intro",
+      "title": "Meet AdDash",
+      "badge": "LIVE ADMOB REVENUE",
+      "startSec": 0.0,
+      "durationSec": 16.13,
+      "startFrame": 0,
+      "durationFrames": 968,
+      "captions": [
+        {
+          "text": "Checking your AdMob revenue shouldn't mean keeping a",
+          "startSec": 0.7,
+          "endSec": 3.964,
+          "startFrame": 42,
+          "endFrame": 238
+        },
+        {
+          "text": "browser tab open and hitting refresh all day.",
+          "startSec": 3.964,
+          "endSec": 7.228,
+          "startFrame": 238,
+          "endFrame": 434
+        },
+        {
+          "text": "Meet AdDash \u2014",
+          "startSec": 7.228,
+          "endSec": 8.452,
+          "startFrame": 434,
+          "endFrame": 507
+        },
+        {
+          "text": "the live,",
+          "startSec": 8.452,
+          "endSec": 9.268,
+          "startFrame": 507,
+          "endFrame": 556
+        },
+        {
+          "text": "multi-platform AdMob dashboard built for app developers who",
+          "startSec": 9.268,
+          "endSec": 12.532,
+          "startFrame": 556,
+          "endFrame": 752
+        },
+        {
+          "text": "want instant numbers at a glance.",
+          "startSec": 12.532,
+          "endSec": 14.98,
+          "startFrame": 752,
+          "endFrame": 899
+        }
+      ]
+    },
+    {
+      "id": "02_refresh",
+      "title": "No More Website Refreshes",
+      "badge": "AUTO-REFRESH ENGINE",
+      "startSec": 16.13,
+      "durationSec": 29.0,
+      "startFrame": 968,
+      "durationFrames": 1740,
+      "captions": [
+        {
+          "text": "We all know the routine: open the AdMob website,",
+          "startSec": 0.7,
+          "endSec": 4.165,
+          "startFrame": 42,
+          "endFrame": 250
+        },
+        {
+          "text": "wait for heavy scripts to load,",
+          "startSec": 4.165,
+          "endSec": 6.475,
+          "startFrame": 250,
+          "endFrame": 389
+        },
+        {
+          "text": "log back in when your session expires,",
+          "startSec": 6.475,
+          "endSec": 9.171,
+          "startFrame": 389,
+          "endFrame": 550
+        },
+        {
+          "text": "and mash refresh just to see if today's",
+          "startSec": 9.171,
+          "endSec": 12.251,
+          "startFrame": 550,
+          "endFrame": 735
+        },
+        {
+          "text": "earnings moved.",
+          "startSec": 12.251,
+          "endSec": 13.021,
+          "startFrame": 735,
+          "endFrame": 781
+        },
+        {
+          "text": "AdDash solves this completely.",
+          "startSec": 13.021,
+          "endSec": 14.561,
+          "startFrame": 781,
+          "endFrame": 874
+        },
+        {
+          "text": "It connects directly to your AdMob account,",
+          "startSec": 14.561,
+          "endSec": 17.256,
+          "startFrame": 874,
+          "endFrame": 1035
+        },
+        {
+          "text": "caches your data locally for instant launch,",
+          "startSec": 17.256,
+          "endSec": 19.951,
+          "startFrame": 1035,
+          "endFrame": 1197
+        },
+        {
+          "text": "and auto-refreshes in the background every thirty seconds,",
+          "startSec": 19.951,
+          "endSec": 23.032,
+          "startFrame": 1197,
+          "endFrame": 1382
+        },
+        {
+          "text": "one minute,",
+          "startSec": 23.032,
+          "endSec": 23.802,
+          "startFrame": 1382,
+          "endFrame": 1428
+        },
+        {
+          "text": "two minutes,",
+          "startSec": 23.802,
+          "endSec": 24.572,
+          "startFrame": 1428,
+          "endFrame": 1474
+        },
+        {
+          "text": "or five minutes \u2014",
+          "startSec": 24.572,
+          "endSec": 26.112,
+          "startFrame": 1474,
+          "endFrame": 1567
+        },
+        {
+          "text": "zero manual reloads required.",
+          "startSec": 26.112,
+          "endSec": 27.652,
+          "startFrame": 1567,
+          "endFrame": 1659
+        }
+      ]
+    },
+    {
+      "id": "03_bubble",
+      "title": "Always-On Floating Bubble",
+      "badge": "ANDROID OVERLAY",
+      "startSec": 45.13,
+      "durationSec": 32.0,
+      "startFrame": 2708,
+      "durationFrames": 1920,
+      "captions": [
+        {
+          "text": "Need to stay in flow while watching your numbers?",
+          "startSec": 0.7,
+          "endSec": 3.668,
+          "startFrame": 42,
+          "endFrame": 220
+        },
+        {
+          "text": "Turn on the AdDash Floating Bubble on Android.",
+          "startSec": 3.668,
+          "endSec": 6.306,
+          "startFrame": 220,
+          "endFrame": 378
+        },
+        {
+          "text": "It stays visible on top of any app",
+          "startSec": 6.306,
+          "endSec": 8.944,
+          "startFrame": 378,
+          "endFrame": 537
+        },
+        {
+          "text": "you're using,",
+          "startSec": 8.944,
+          "endSec": 9.604,
+          "startFrame": 537,
+          "endFrame": 576
+        },
+        {
+          "text": "snaps cleanly to the edge of your screen,",
+          "startSec": 9.604,
+          "endSec": 12.242,
+          "startFrame": 576,
+          "endFrame": 735
+        },
+        {
+          "text": "and updates live.",
+          "startSec": 12.242,
+          "endSec": 13.232,
+          "startFrame": 735,
+          "endFrame": 794
+        },
+        {
+          "text": "The bubble even shifts color based on your",
+          "startSec": 13.232,
+          "endSec": 15.87,
+          "startFrame": 794,
+          "endFrame": 952
+        },
+        {
+          "text": "daily goal progress \u2014",
+          "startSec": 15.87,
+          "endSec": 17.189,
+          "startFrame": 952,
+          "endFrame": 1031
+        },
+        {
+          "text": "from red,",
+          "startSec": 17.189,
+          "endSec": 17.848,
+          "startFrame": 1031,
+          "endFrame": 1071
+        },
+        {
+          "text": "to amber,",
+          "startSec": 17.848,
+          "endSec": 18.508,
+          "startFrame": 1071,
+          "endFrame": 1110
+        },
+        {
+          "text": "to blue,",
+          "startSec": 18.508,
+          "endSec": 19.168,
+          "startFrame": 1110,
+          "endFrame": 1150
+        },
+        {
+          "text": "and green the moment you hit one hundred percent.",
+          "startSec": 19.168,
+          "endSec": 22.136,
+          "startFrame": 1150,
+          "endFrame": 1328
+        },
+        {
+          "text": "Customize its size and opacity,",
+          "startSec": 22.136,
+          "endSec": 23.784,
+          "startFrame": 1328,
+          "endFrame": 1427
+        },
+        {
+          "text": "or drag it to the bottom target anytime",
+          "startSec": 23.784,
+          "endSec": 26.423,
+          "startFrame": 1427,
+          "endFrame": 1585
+        },
+        {
+          "text": "to hide it.",
+          "startSec": 26.423,
+          "endSec": 27.412,
+          "startFrame": 1585,
+          "endFrame": 1645
+        }
+      ]
+    },
+    {
+      "id": "04_fullscreen",
+      "title": "Fullscreen Dash for TVs & Screens",
+      "badge": "TV & KIOSK HUD",
+      "startSec": 77.13,
+      "durationSec": 34.0,
+      "startFrame": 4628,
+      "durationFrames": 2040,
+      "captions": [
+        {
+          "text": "Want a dedicated display for your desk or",
+          "startSec": 0.7,
+          "endSec": 3.882,
+          "startFrame": 42,
+          "endFrame": 233
+        },
+        {
+          "text": "studio wall?",
+          "startSec": 3.882,
+          "endSec": 4.677,
+          "startFrame": 233,
+          "endFrame": 281
+        },
+        {
+          "text": "Switch into AdDash Fullscreen Mode.",
+          "startSec": 4.677,
+          "endSec": 6.666,
+          "startFrame": 281,
+          "endFrame": 400
+        },
+        {
+          "text": "Designed for tablets,",
+          "startSec": 6.666,
+          "endSec": 7.859,
+          "startFrame": 400,
+          "endFrame": 472
+        },
+        {
+          "text": "desktop monitors,",
+          "startSec": 7.859,
+          "endSec": 8.654,
+          "startFrame": 472,
+          "endFrame": 519
+        },
+        {
+          "text": "smart TVs,",
+          "startSec": 8.654,
+          "endSec": 9.45,
+          "startFrame": 519,
+          "endFrame": 567
+        },
+        {
+          "text": "and even a Raspberry Pi,",
+          "startSec": 9.45,
+          "endSec": 11.438,
+          "startFrame": 567,
+          "endFrame": 686
+        },
+        {
+          "text": "this deep-navy landscape HUD stays awake with built-in",
+          "startSec": 11.438,
+          "endSec": 14.62,
+          "startFrame": 686,
+          "endFrame": 877
+        },
+        {
+          "text": "OLED burn-in protection.",
+          "startSec": 14.62,
+          "endSec": 15.813,
+          "startFrame": 877,
+          "endFrame": 949
+        },
+        {
+          "text": "Every time your live earnings tick upward,",
+          "startSec": 15.813,
+          "endSec": 18.597,
+          "startFrame": 949,
+          "endFrame": 1116
+        },
+        {
+          "text": "the counter bounces with a celebration burst of confetti.",
+          "startSec": 18.597,
+          "endSec": 22.177,
+          "startFrame": 1116,
+          "endFrame": 1331
+        },
+        {
+          "text": "Plug in a monitor or mount a TV,",
+          "startSec": 22.177,
+          "endSec": 25.358,
+          "startFrame": 1331,
+          "endFrame": 1521
+        },
+        {
+          "text": "and your revenue updates itself all day long.",
+          "startSec": 25.358,
+          "endSec": 28.54,
+          "startFrame": 1521,
+          "endFrame": 1712
+        }
+      ]
+    },
+    {
+      "id": "05_today_goals",
+      "title": "Today Dashboard & Daily Goals",
+      "badge": "REAL-TIME METRICS",
+      "startSec": 111.13,
+      "durationSec": 26.0,
+      "startFrame": 6668,
+      "durationFrames": 1560,
+      "captions": [
+        {
+          "text": "Inside the Today tab,",
+          "startSec": 0.7,
+          "endSec": 2.49,
+          "startFrame": 42,
+          "endFrame": 149
+        },
+        {
+          "text": "you get an instant pulse on estimated earnings,",
+          "startSec": 2.49,
+          "endSec": 6.07,
+          "startFrame": 149,
+          "endFrame": 364
+        },
+        {
+          "text": "live trend curves,",
+          "startSec": 6.07,
+          "endSec": 7.413,
+          "startFrame": 364,
+          "endFrame": 445
+        },
+        {
+          "text": "eCPM,",
+          "startSec": 7.413,
+          "endSec": 7.86,
+          "startFrame": 445,
+          "endFrame": 472
+        },
+        {
+          "text": "impressions,",
+          "startSec": 7.86,
+          "endSec": 8.308,
+          "startFrame": 472,
+          "endFrame": 498
+        },
+        {
+          "text": "clicks,",
+          "startSec": 8.308,
+          "endSec": 8.755,
+          "startFrame": 498,
+          "endFrame": 525
+        },
+        {
+          "text": "and match rate.",
+          "startSec": 8.755,
+          "endSec": 10.098,
+          "startFrame": 525,
+          "endFrame": 606
+        },
+        {
+          "text": "Switch effortlessly between Today,",
+          "startSec": 10.098,
+          "endSec": 11.887,
+          "startFrame": 606,
+          "endFrame": 713
+        },
+        {
+          "text": "Yesterday,",
+          "startSec": 11.887,
+          "endSec": 12.335,
+          "startFrame": 713,
+          "endFrame": 740
+        },
+        {
+          "text": "Seven Days,",
+          "startSec": 12.335,
+          "endSec": 13.23,
+          "startFrame": 740,
+          "endFrame": 794
+        },
+        {
+          "text": "This Month,",
+          "startSec": 13.23,
+          "endSec": 14.125,
+          "startFrame": 794,
+          "endFrame": 847
+        },
+        {
+          "text": "or custom date ranges.",
+          "startSec": 14.125,
+          "endSec": 15.915,
+          "startFrame": 847,
+          "endFrame": 955
+        },
+        {
+          "text": "Set a daily revenue target and track your",
+          "startSec": 15.915,
+          "endSec": 19.495,
+          "startFrame": 955,
+          "endFrame": 1170
+        },
+        {
+          "text": "progress ring alongside your multi-day streak.",
+          "startSec": 19.495,
+          "endSec": 22.18,
+          "startFrame": 1170,
+          "endFrame": 1331
+        }
+      ]
+    },
+    {
+      "id": "06_analytics_wallet",
+      "title": "Apps, Analytics, Reports & Wallet",
+      "badge": "COMPLETE SUITE",
+      "startSec": 137.13,
+      "durationSec": 25.0,
+      "startFrame": 8228,
+      "durationFrames": 1500,
+      "captions": [
+        {
+          "text": "Every iOS and Android app lives on one",
+          "startSec": 0.7,
+          "endSec": 4.45,
+          "startFrame": 42,
+          "endFrame": 267
+        },
+        {
+          "text": "clean shelf.",
+          "startSec": 4.45,
+          "endSec": 5.388,
+          "startFrame": 267,
+          "endFrame": 323
+        },
+        {
+          "text": "Dive into per-app performance,",
+          "startSec": 5.388,
+          "endSec": 7.263,
+          "startFrame": 323,
+          "endFrame": 436
+        },
+        {
+          "text": "thirty and ninety-day analytics trends,",
+          "startSec": 7.263,
+          "endSec": 9.607,
+          "startFrame": 436,
+          "endFrame": 576
+        },
+        {
+          "text": "top-earning countries,",
+          "startSec": 9.607,
+          "endSec": 10.545,
+          "startFrame": 576,
+          "endFrame": 633
+        },
+        {
+          "text": "ad format breakdowns,",
+          "startSec": 10.545,
+          "endSec": 11.951,
+          "startFrame": 633,
+          "endFrame": 717
+        },
+        {
+          "text": "and hourly reports.",
+          "startSec": 11.951,
+          "endSec": 13.358,
+          "startFrame": 717,
+          "endFrame": 801
+        },
+        {
+          "text": "And when payout day approaches,",
+          "startSec": 13.358,
+          "endSec": 15.702,
+          "startFrame": 801,
+          "endFrame": 942
+        },
+        {
+          "text": "the Wallet tab keeps your unpaid balance and",
+          "startSec": 15.702,
+          "endSec": 19.452,
+          "startFrame": 942,
+          "endFrame": 1167
+        },
+        {
+          "text": "full payout history crystal clear.",
+          "startSec": 19.452,
+          "endSec": 21.796,
+          "startFrame": 1167,
+          "endFrame": 1308
+        }
+      ]
+    },
+    {
+      "id": "07_outro",
+      "title": "Stop Refreshing. Watch It Live.",
+      "badge": "ANDROID \u2022 iOS \u2022 DESKTOP \u2022 PI",
+      "startSec": 162.13,
+      "durationSec": 16.0,
+      "startFrame": 9728,
+      "durationFrames": 960,
+      "captions": [
+        {
+          "text": "Available across Android,",
+          "startSec": 0.7,
+          "endSec": 2.335,
+          "startFrame": 42,
+          "endFrame": 140
+        },
+        {
+          "text": "iOS,",
+          "startSec": 2.335,
+          "endSec": 2.881,
+          "startFrame": 140,
+          "endFrame": 173
+        },
+        {
+          "text": "macOS,",
+          "startSec": 2.881,
+          "endSec": 3.426,
+          "startFrame": 173,
+          "endFrame": 206
+        },
+        {
+          "text": "Windows,",
+          "startSec": 3.426,
+          "endSec": 3.971,
+          "startFrame": 206,
+          "endFrame": 238
+        },
+        {
+          "text": "Linux,",
+          "startSec": 3.971,
+          "endSec": 4.516,
+          "startFrame": 238,
+          "endFrame": 271
+        },
+        {
+          "text": "and Raspberry Pi.",
+          "startSec": 4.516,
+          "endSec": 6.151,
+          "startFrame": 271,
+          "endFrame": 369
+        },
+        {
+          "text": "Stop refreshing your browser.",
+          "startSec": 6.151,
+          "endSec": 8.332,
+          "startFrame": 369,
+          "endFrame": 500
+        },
+        {
+          "text": "Download AdDash and watch your revenue live.",
+          "startSec": 8.332,
+          "endSec": 12.148,
+          "startFrame": 500,
+          "endFrame": 729
+        }
+      ]
+    }
+  ]
+}

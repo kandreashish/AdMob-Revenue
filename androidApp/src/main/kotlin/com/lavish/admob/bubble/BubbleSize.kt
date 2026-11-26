@@ -40,3 +40,34 @@ object BubbleSizePref {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(KEY, v).apply()
     }
 }
+
+/** Bubble idle opacity as a percentage (20%..100%, default 60%). */
+object BubbleAlphaPref {
+    const val MIN_PERCENT = 20
+    const val MAX_PERCENT = 100
+    const val DEFAULT_PERCENT = 60
+
+    private const val PREFS = "earnings_bubble"
+    private const val KEY = "bubble_alpha_pct"
+
+    private val _alphaPercent = MutableStateFlow(DEFAULT_PERCENT)
+    val alphaPercent: StateFlow<Int> = _alphaPercent.asStateFlow()
+    private var loaded = false
+
+    val previewPercent = MutableStateFlow<Int?>(null)
+
+    fun toFloat(percent: Int): Float = (percent.coerceIn(MIN_PERCENT, MAX_PERCENT)) / 100f
+
+    fun init(context: Context) {
+        if (loaded) return
+        loaded = true
+        _alphaPercent.value = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY, DEFAULT_PERCENT).coerceIn(MIN_PERCENT, MAX_PERCENT)
+    }
+
+    fun set(context: Context, percent: Int) {
+        val v = percent.coerceIn(MIN_PERCENT, MAX_PERCENT)
+        _alphaPercent.value = v
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(KEY, v).apply()
+    }
+}

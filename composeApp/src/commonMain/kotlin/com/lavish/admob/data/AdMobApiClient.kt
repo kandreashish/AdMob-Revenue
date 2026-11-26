@@ -189,7 +189,12 @@ class AdMobApiClient(
                 val appObj = appEl.jsonObject
                 val appId = appObj["appId"]?.jsonPrimitive?.content ?: "app-$index"
                 val platformStr = appObj["platform"]?.jsonPrimitive?.content ?: "ANDROID"
-                val platform = if (platformStr.equals("IOS", ignoreCase = true)) "iOS" else "Android"
+                val platform = when {
+                    platformStr.equals("IOS", ignoreCase = true) -> "iOS"
+                    platformStr.contains("MAC", ignoreCase = true) || platformStr.equals("OSX", ignoreCase = true) -> "macOS"
+                    platformStr.contains("WEB", ignoreCase = true) -> "Website"
+                    else -> "Android"
+                }
                 val manualTitle = appObj["manualAppInfo"]?.jsonObject?.get("displayName")?.jsonPrimitive?.content
                 val linkedAppInfo = appObj["linkedAppInfo"]?.jsonObject
                 val linkedTitle = linkedAppInfo?.get("displayName")?.jsonPrimitive?.content

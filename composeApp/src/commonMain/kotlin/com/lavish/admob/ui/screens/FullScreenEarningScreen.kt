@@ -63,7 +63,8 @@ import com.lavish.admob.theme.BotanicalGreenDark
 import com.lavish.admob.theme.BotanicalGreenLight
 import com.lavish.admob.theme.SolarAmber
 import com.lavish.admob.theme.SolarTheme
-import com.lavish.admob.ui.components.CelebrationConfetti
+import com.lavish.admob.platform.PlatformSlots
+import com.lavish.admob.ui.components.FireworksLottie
 import com.lavish.admob.ui.navigation.BackHandler
 import com.lavish.admob.ui.utils.PlatformLandscapeEffect
 import com.lavish.admob.ui.utils.formatAmount
@@ -278,10 +279,24 @@ fun FullScreenEarningScreen(
                         blurRadius = 48f
                     )
                 ),
-                modifier = Modifier.graphicsLayer {
-                    scaleX = bounce.value
-                    scaleY = bounce.value
-                }
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = bounce.value
+                        scaleY = bounce.value
+                    }
+                    .then(
+                        if (PlatformSlots.isDebugBuild) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                lastActivityMs = nowMs()
+                                celebrationTrigger++
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
             )
 
             // ▲ $132.40 vs yesterday
@@ -296,11 +311,12 @@ fun FullScreenEarningScreen(
 
             Spacer(modifier = Modifier.height(22.dp))
 
-            // eCPM · Impressions · Goal
+            // eCPM · Impressions · CTR · Goal
             val goalPct = if (summary.dailyGoal > 0.0) (summary.todayRevenue / summary.dailyGoal * 100).toInt() else 0
-            Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(48.dp)) {
                 HudStat("eCPM", "${summary.currencySymbol}${formatAmount(summary.ecpm)}", textSecondaryColor, statValueColor)
                 HudStat("Impressions", formatCompactNumber(summary.impressions), textSecondaryColor, statValueColor)
+                HudStat("CTR", "${summary.ctr}%", textSecondaryColor, statValueColor)
                 HudStat("Goal", "$goalPct%", textSecondaryColor, statValueColor)
             }
         }
@@ -403,10 +419,9 @@ fun FullScreenEarningScreen(
                 .graphicsLayer { translationX = shiftX.value * 0.4f; translationY = shiftY.value * 0.4f }
         )
 
-        // Celebration Confetti Layer (Bursts on revenue changes)
-        CelebrationConfetti(
-            triggerKey = celebrationTrigger.takeIf { it > 0 },
-            particleCount = 140
+        // Fireworks Lottie Layer (Plays once on revenue increases, or tap amount in debug)
+        FireworksLottie(
+            triggerKey = celebrationTrigger.takeIf { it > 0 }
         )
 
         // Burn-in dim / refresh overlay (no click handler, so taps pass through to the root)

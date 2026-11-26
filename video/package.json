@@ -1,0 +1,23 @@
+{
+  "name": "addash-explainer-video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "60fps studio-grade Remotion explainer video for AdDash",
+  "scripts": {
+    "studio": "remotion studio",
+    "build": "remotion render src/index.ts AdDashExplainer ../playstore/addash_explainer_16x9.mp4 --concurrency=50%"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.280",
+    "@remotion/media-utils": "^4.0.280",
+    "@remotion/renderer": "^4.0.280",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.280"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}

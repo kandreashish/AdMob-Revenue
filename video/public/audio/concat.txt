@@ -1,0 +1,7 @@
+file '/Users/ashish/Desktop/Apps/Admob App/video/public/audio/01_intro_pad.wav'
+file '/Users/ashish/Desktop/Apps/Admob App/video/public/audio/02_refresh_pad.wav'
+file '/Users/ashish/Desktop/Apps/Admob App/video/public/audio/03_bubble_pad.wav'
+file '/Users/ashish/Desktop/Apps/Admob App/video/public/audio/04_fullscreen_pad.wav'
+file '/Users/ashish/Desktop/Apps/Admob App/video/public/audio/05_today_goals_pad.wav'
+file '/Users/ashish/Desktop/Apps/Admob App/video/public/audio/06_analytics_wallet_pad.wav'
+file '/Users/ashish/Desktop/Apps/Admob App/video/public/audio/07_outro_pad.wav'

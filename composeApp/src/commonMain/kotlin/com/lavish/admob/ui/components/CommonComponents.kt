@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -596,27 +597,37 @@ fun SolarBottomDock(
         }
     }
 
+    val dockShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    val activeTint = if (SolarTheme.colors.isDark) {
+        SolarTheme.colors.onPrimaryContainer
+    } else {
+        com.lavish.admob.theme.AdMobSelectedText
+    }
+    val dividerColor = SolarTheme.colors.borderSubtle.copy(alpha = 0.75f)
+    val accentBarWidthDp = 32.dp
+
     Surface(
         modifier = modifier
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .fillMaxWidth()
             .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(999.dp),
+                elevation = 10.dp,
+                shape = dockShape,
                 ambientColor = Color.Black.copy(alpha = 0.08f),
                 spotColor = Color.Black.copy(alpha = 0.08f)
             )
-            .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(999.dp)),
+            .border(1.dp, SolarTheme.colors.borderSubtle.copy(alpha = 0.85f), dockShape),
         color = SolarTheme.colors.bottomDockBackground,
-        shape = RoundedCornerShape(999.dp)
+        shape = dockShape
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 5.dp)
-                .height(52.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = 8.dp)
+                .height(64.dp)
                 .onSizeChanged { trackWidthPx = it.width.toFloat() }
-                // Glide: press anywhere on the dock and slide — the pill follows your finger
-                // and tabs switch live as you cross them (iOS 26 tab bar behaviour).
+                // Glide: press anywhere on the dock and slide — the accent bar follows your finger
+                // and tabs switch live as you cross them.
                 .pointerInput(tabCount) {
                     detectHorizontalDragGestures(
                         onDragStart = { offset ->
@@ -643,30 +654,10 @@ fun SolarBottomDock(
                     )
                 }
         ) {
-            // Sliding pill
-            if (trackWidthPx > 0f) {
-                val slotWDp = with(density) { (trackWidthPx / tabCount).toDp() }
-                Box(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            translationX = indicatorPos.value * (trackWidthPx / tabCount)
-                            scaleX = pressScale
-                            scaleY = pressScale
-                        }
-                        .width(slotWDp)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(
-                            SolarTheme.colors.primaryContainer.copy(alpha = if (isDragging) 0.75f else 1f)
-                        )
-                )
-            }
-
             Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 tabs.forEachIndexed { index, tab ->
-                    // 0..1 how "under the pill" this slot is — drives smooth colour blending while gliding.
+                    // 0..1 how close the indicator is to this slot — drives smooth colour blending while gliding.
                     val closeness = (1f - kotlin.math.abs(indicatorPos.value - index)).coerceIn(0f, 1f)
-                    val activeTint = if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.lavish.admob.theme.AdMobSelectedText
                     val tint = androidx.compose.ui.graphics.lerp(SolarTheme.colors.textSecondary, activeTint, closeness)
                     val isSelected = tab == currentTab
 
@@ -674,7 +665,6 @@ fun SolarBottomDock(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(999.dp))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -682,8 +672,9 @@ fun SolarBottomDock(
                                 if (tab != currentTab) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 onTabSelected(tab)
                             }
+                            .padding(top = 8.dp, bottom = 10.dp)
                             .graphicsLayer {
-                                val s = 1f + 0.08f * closeness * (if (isDragging) 1f else 0f)
+                                val s = 1f + 0.06f * closeness * (if (isDragging) 1f else 0f)
                                 scaleX = s; scaleY = s
                             },
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -695,17 +686,46 @@ fun SolarBottomDock(
                             tint = tint,
                             modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = tab.label,
+                            text = tab.label.uppercase(),
                             fontSize = 10.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            letterSpacing = 0.8.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                             color = tint,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    if (index < tabCount - 1) {
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(dividerColor)
+                        )
+                    }
                 }
+            }
+
+            // Sliding geometric bottom accent bar indicator
+            if (trackWidthPx > 0f) {
+                val slotWPx = trackWidthPx / tabCount
+                val barWPx = with(density) { accentBarWidthDp.toPx() }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(bottom = 4.dp)
+                        .graphicsLayer {
+                            translationX = indicatorPos.value * slotWPx + (slotWPx - barWPx) / 2f
+                            scaleX = pressScale
+                        }
+                        .width(accentBarWidthDp)
+                        .height(3.5.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(activeTint)
+                )
             }
         }
     }

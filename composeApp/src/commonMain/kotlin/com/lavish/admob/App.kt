@@ -754,7 +754,9 @@ private fun ProfileSettingsDialog(
             text = {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.verticalScroll(rememberScrollState())
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     // Publisher ID row (Dashed second half for privacy by default)
                     Surface(
@@ -1145,7 +1147,6 @@ private fun SettingsScreenScaffold(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) { text() }
             HorizontalDivider(color = SolarTheme.colors.borderSubtle)
             // Bottom actions

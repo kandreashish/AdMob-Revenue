@@ -118,6 +118,7 @@ kotlin {
                 implementation(libs.ktor.serialization.kotlinx.json)
                 api(libs.multiplatform.settings)
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.compottie)
                 implementation(libs.kotlinx.datetime)
             }
         }

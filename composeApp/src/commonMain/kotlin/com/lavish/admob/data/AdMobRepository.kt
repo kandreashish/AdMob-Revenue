@@ -48,6 +48,7 @@ class AdMobRepository(
         private const val KEY_THEME_MODE = "solarad_theme_mode"
         private const val KEY_USER_AVATAR_URL = "solarad_user_avatar_url"
         private const val KEY_CACHE_SUMMARY = "solarad_cache_summary"
+        private const val KEY_CACHE_TODAY_SUMMARY = "solarad_cache_today_summary"
         private const val KEY_CACHE_ALL_APPS = "solarad_cache_all_apps"
         private const val KEY_CACHE_ANALYTICS = "solarad_cache_analytics"
         private const val KEY_CACHE_WALLET = "solarad_cache_wallet"
@@ -190,6 +191,12 @@ class AdMobRepository(
     )
     val accountSummary: StateFlow<AccountSummary> = _accountSummary.asStateFlow()
 
+    /** Always reflects TimeRange.TODAY regardless of the active UI filter (used by widgets). */
+    private val _todaySummary = MutableStateFlow(
+        loadCachedObject<AccountSummary>(KEY_CACHE_TODAY_SUMMARY) { createEmptySummary() }
+    )
+    val todaySummary: StateFlow<AccountSummary> = _todaySummary.asStateFlow()
+
     private val _allApps = MutableStateFlow<List<AppMonetization>>(
         loadCachedList(KEY_CACHE_ALL_APPS)
     )
@@ -247,6 +254,8 @@ class AdMobRepository(
 
     // Declared before init: the init block launches a fetch that uses these concurrently.
     var tokenRefresher: (suspend () -> String?)? = null
+    /** Optional platform hook notified whenever Today's persisted summary or session changes. */
+    var onTodaySummaryUpdated: ((AccountSummary, UserSession) -> Unit)? = null
     @kotlin.concurrent.Volatile private var recomputeJob: kotlinx.coroutines.Job? = null
     private val recomputeMutex = Mutex()
     private val fetchMutex = Mutex()
@@ -412,6 +421,21 @@ class AdMobRepository(
             } else {
                 summary
             }
+            val todayOnly = if (range == TimeRange.TODAY) {
+                _accountSummary.value
+            } else {
+                val rawToday = AdMobApiClient.computeAccountSummary(
+                    rows = cachedReportRows,
+                    range = TimeRange.TODAY,
+                    today = today,
+                    publisherId = activePublisherId.ifBlank { "AdMob" },
+                    currencyCode = _session.value.currencyCode,
+                    currencySymbol = _session.value.currencySymbol,
+                    customDailyGoal = _customDailyGoal.value
+                )
+                if (_isOffline.value) rawToday.copy(lastSyncTime = "Offline • Cached Data") else rawToday
+            }
+            _todaySummary.value = todayOnly
             _allApps.value = AdMobApiClient.computeAppsMonetization(
                 rows = cachedReportRows,
                 registeredApps = cachedRegisteredApps,
@@ -457,9 +481,11 @@ class AdMobRepository(
         if (!persist) return
         try {
             settings?.putString(KEY_CACHE_SUMMARY, json.encodeToString(_accountSummary.value))
+            settings?.putString(KEY_CACHE_TODAY_SUMMARY, json.encodeToString(_todaySummary.value))
             settings?.putString(KEY_CACHE_ALL_APPS, json.encodeToString(_allApps.value))
             settings?.putString(KEY_CACHE_ANALYTICS, json.encodeToString(_analytics.value))
         } catch (_: Exception) {}
+        onTodaySummaryUpdated?.invoke(_todaySummary.value, _session.value)
     }
 
     fun recordRefreshTimestamp() {
@@ -826,6 +852,22 @@ class AdMobRepository(
         }
     }
 
+    /**
+     * Suspends until a fresh AdMob fetch completes (for background workers / widgets).
+     * Returns true if new data was fetched and applied.
+     */
+    suspend fun refreshForBackground(): Boolean {
+        val token = currentAccessToken?.takeIf { it.isNotBlank() }
+            ?: try { tokenRefresher?.invoke() } catch (_: Exception) { null }?.also { updateAccessToken(it) }
+        if (token.isNullOrBlank()) return false
+        return try {
+            fetchAndApplyRealData(token, _session.value.userName, _session.value.email, _session.value.avatarUrl)
+            !_isOffline.value
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun logout() {
         val prevUser = _session.value.email.ifBlank { _session.value.publisherId }
         if (prevUser.isNotBlank()) {
@@ -853,6 +895,7 @@ class AdMobRepository(
             remove(KEY_ACCESS_TOKEN)
             remove(KEY_USER_AVATAR_URL)
             remove(KEY_CACHE_SUMMARY)
+            remove(KEY_CACHE_TODAY_SUMMARY)
             remove(KEY_CACHE_ALL_APPS)
             remove(KEY_CACHE_ANALYTICS)
             remove(KEY_CACHE_WALLET)
@@ -878,6 +921,8 @@ class AdMobRepository(
             avatarUrl = null
         )
         _accountSummary.value = createEmptySummary()
+        _todaySummary.value = createEmptySummary()
+        onTodaySummaryUpdated?.invoke(_todaySummary.value, _session.value)
         _allApps.value = emptyList()
         _analytics.value = createEmptyAnalytics()
         _wallet.value = createEmptyWallet()

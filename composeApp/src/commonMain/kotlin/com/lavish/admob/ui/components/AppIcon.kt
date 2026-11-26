@@ -8,10 +8,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.PhoneIphone
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import kotlinx.coroutines.flow.map
@@ -36,8 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lavish.admob.data.AppIconResolver
 import com.lavish.admob.model.AppMonetization
-import com.lavish.admob.theme.BotanicalGreen
-import com.lavish.admob.theme.OceanAzure
 import com.lavish.admob.theme.SolarTheme
 import kotlin.math.abs
 
@@ -95,7 +89,6 @@ fun AppIcon(
     }
 
     val cornerRadius = size * 0.24f
-    val isIos = app.platform.equals("iOS", ignoreCase = true)
 
     Box(modifier = modifier.size(size)) {
         if (bitmap != null) {
@@ -144,11 +137,9 @@ fun AppIcon(
                     .offset(x = 2.dp, y = 2.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isIos) Icons.Default.PhoneIphone else Icons.Default.PhoneAndroid,
-                        contentDescription = null,
-                        tint = if (isIos) OceanAzure else BotanicalGreen,
-                        modifier = Modifier.size(size * 0.26f)
+                    CompactPlatformIcon(
+                        app = app,
+                        size = size * 0.26f
                     )
                 }
             }
