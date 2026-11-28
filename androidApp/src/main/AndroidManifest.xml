@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Prevent Firebase Analytics from pulling in AD_ID since app does not use Advertising ID -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
     <!-- Earnings Bubble: floating overlay over other apps (user opt-in only) -->
@@ -49,6 +50,27 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-enabled floating bubble that displays the user's current-day AdMob earnings over other apps." />
         </service>
+        <!-- Home-screen earnings widgets -->
+        <receiver android:name="com.lavish.admob.widget.EarningsWidgetSmall" android:exported="false"
+            android:label="@string/widget_small_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_earnings_small_info" />
+        </receiver>
+        <receiver android:name="com.lavish.admob.widget.EarningsWidgetLarge" android:exported="false"
+            android:label="@string/widget_large_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_earnings_large_info" />
+        </receiver>
+        <!-- Redraws the widgets' "Synced …" label at local midnight and when the clock/zone/locale changes.
+             TIME_SET / TIMEZONE_CHANGED / LOCALE_CHANGED are exempt from the Android 8+ implicit-broadcast
+             limits; DATE_CHANGED is not, so midnight is covered by an inexact alarm instead. -->
+        <receiver android:name="com.lavish.admob.widget.WidgetClockReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

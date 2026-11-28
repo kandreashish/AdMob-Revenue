@@ -30,6 +30,8 @@ import androidx.compose.material.icons.outlined.CardGiftcard
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material.icons.outlined.ScreenLockPortrait
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -112,20 +114,20 @@ fun BubblePromoDialog(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = if (mode == PromoMode.Intro)
-                    "See today's AdMob earnings in a floating bubble, on top of any app, without opening AdDash."
+                    "See today's AdMob earnings in a floating bubble, on your lockscreen and in home-screen widgets, without opening AdDash."
                 else
-                    "Keep today's earnings floating on your screen with a one-time ${config.priceLabel} unlock.",
+                    "Keep the bubble, lockscreen earnings and home-screen widgets with a one-time ${config.priceLabel} unlock.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
             Spacer(Modifier.height(20.dp))
-            SectionLabel("How it works")
-            FeatureRow(Icons.Outlined.Layers, "Always visible", "A small bubble shows today's earnings over any app or your home screen.")
-            FeatureRow(Icons.Outlined.Refresh, "Updates automatically", "Earnings refresh every 10–15 minutes in the background.")
-            FeatureRow(Icons.Outlined.TouchApp, "Easy to control", "Drag it anywhere. Tap to open AdDash. Drag it to ✕ to hide it.")
-            FeatureRow(Icons.Outlined.BatterySaver, "Light on battery", "Pauses when your screen is off.")
+            SectionLabel("What you get")
+            FeatureRow(Icons.Outlined.Layers, "Floating bubble", "Today's earnings over any app. Drag it anywhere, tap to open AdDash, drag to ✕ to hide.")
+            FeatureRow(Icons.Outlined.ScreenLockPortrait, "Lockscreen earnings", "See today's earnings without unlocking your phone.")
+            FeatureRow(Icons.Outlined.Widgets, "Home-screen widgets", "Small: today's earnings. Large: vs yesterday, goal progress, impressions, eCPM, clicks.")
+            FeatureRow(Icons.Outlined.Refresh, "Updates automatically", "Everything refreshes in the background. Light on battery.")
 
             Spacer(Modifier.height(16.dp))
             SectionLabel("Pricing")
@@ -136,7 +138,7 @@ fun BubblePromoDialog(
                 Icon(Icons.Outlined.Lock, null, Modifier.size(16.dp).offset(y = 2.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Android will ask for the \"Display over other apps\" permission. AdDash uses it only to draw the bubble. You can turn the bubble off any time.",
+                    "For the bubble, Android will ask for the \"Display over other apps\" permission. AdDash uses it only to draw the bubble. You can turn any feature off any time.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -216,9 +218,9 @@ private fun PricingCard(mode: PromoMode, config: BubbleConfig) {
                 PriceLine("Free for ${config.trialLabel}", "No payment needed to start")
                 HorizontalDivider(Modifier.padding(vertical = 10.dp))
             }
-            PriceLine("Then ${config.priceLabel}, one time", "Keep the bubble forever. Not a subscription.")
+            PriceLine("Then ${config.priceLabel}, one time", "Bubble, lockscreen and widgets forever. Not a subscription.")
             HorizontalDivider(Modifier.padding(vertical = 10.dp))
-            PriceLine("Nothing is charged automatically", "When the trial ends, the bubble locks until you choose to buy.")
+            PriceLine("Nothing is charged automatically", "When the trial ends, these features lock until you choose to buy.")
         }
     }
 }

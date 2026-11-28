@@ -363,6 +363,45 @@ fun BubbleSettingsRow() {
                     )
                 }
             }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Sub-card 3: Home-screen widgets (same paywall)
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("Home-screen widgets", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Small: today's earnings. Large: today vs yesterday, goal, impressions, eCPM, clicks.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row {
+                        listOf(false to "Add small", true to "Add large").forEach { (large, label) ->
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    if (!access.canUseBubble) {
+                                        BubblePromo.open()
+                                    } else if (!com.lavish.admob.widget.EarningsWidgets.requestPin(context, large)) {
+                                        Toast.makeText(context, "Long-press your home screen → Widgets → AdDash", Toast.LENGTH_LONG).show()
+                                    }
+                                },
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                if (!access.canUseBubble) {
+                                    Icon(Icons.Outlined.Lock, null, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                }
+                                Text(label)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

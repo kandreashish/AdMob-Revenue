@@ -36,15 +36,17 @@ import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.AutoGraph
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
-import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.Apps
-import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material.icons.outlined.AutoGraph
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -64,6 +66,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +91,147 @@ import com.lavish.admob.theme.OceanAzureLight
 import com.lavish.admob.theme.PureWhite
 import com.lavish.admob.theme.SolarAmber
 import com.lavish.admob.theme.SolarTheme
+
+@Composable
+fun AdMobBrandHeader(
+    title: String,
+    accountName: String? = null,
+    avatarUrl: String? = null,
+    isOffline: Boolean = false,
+    isRefreshing: Boolean = false,
+    onAccountClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = SolarTheme.colors.surface
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    // AdMob 3-dot geometric brand mark
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(com.lavish.admob.theme.AdMobCoralRed)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(com.lavish.admob.theme.AdMobYellow)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(SolarAmber)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "AdMob",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = SolarTheme.colors.textSecondary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(16.dp)
+                            .background(SolarTheme.colors.borderMedium)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SolarTheme.colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val statusBg = if (isOffline) com.lavish.admob.theme.AdMobYellowLight else SolarTheme.colors.successContainer
+                    val statusDot = if (isOffline) com.lavish.admob.theme.AdMobYellow else BotanicalGreen
+                    val statusText = if (isOffline) com.lavish.admob.theme.EspressoSlate else SolarTheme.colors.onSuccessContainer
+                    val statusLabel = when {
+                        isOffline -> "Offline"
+                        isRefreshing -> "Syncing"
+                        else -> "Live"
+                    }
+
+                    Surface(
+                        color = statusBg,
+                        shape = RoundedCornerShape(999.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(statusDot)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = statusLabel,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = statusText
+                            )
+                        }
+                    }
+
+                    if (onAccountClick != null) {
+                        Surface(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .clickable { onAccountClick() },
+                            color = com.lavish.admob.theme.AdMobCoralRed,
+                            shape = CircleShape
+                        ) {
+                            UserProfileAvatar(
+                                avatarUrl = avatarUrl,
+                                userName = accountName ?: "",
+                                modifier = Modifier.fillMaxSize(),
+                                iconSize = 18.dp
+                            )
+                        }
+                    }
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(SolarTheme.colors.borderMedium)
+            )
+        }
+    }
+}
 
 @Composable
 fun SolarHeader(
@@ -253,6 +397,8 @@ fun MetricTwinCard(
     subBadge: String,
     isPositive: Boolean = true,
     icon: ImageVector? = null,
+    increaseText: String? = null,
+    onInfoClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -284,7 +430,19 @@ fun MetricTwinCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                if (icon != null) {
+                if (onInfoClick != null) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = "$label details",
+                        tint = SolarTheme.colors.textSecondary,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .clickable { onInfoClick() }
+                            .padding(3.dp)
+                    )
+                } else if (icon != null) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = icon,
@@ -297,14 +455,20 @@ fun MetricTwinCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            Text(
-                text = value,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = SolarTheme.colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = value,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SolarTheme.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (increaseText != null) {
+                    IncreaseChip(text = increaseText, color = IncreaseGreen, modifier = Modifier.padding(start = 4.dp))
+                }
+            }
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -333,6 +497,44 @@ fun MetricTwinCard(
                     )
                 }
             }
+        }
+    }
+}
+
+val IncreaseGreen = Color(0xFF1E8E3E)
+
+/** Small "▲ +X" chip shown when a metric went up; fades out after [visibleMillis]. */
+@Composable
+fun IncreaseChip(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    visibleMillis: Long = 12_000L
+) {
+    // Re-keyed on text so a new increase shows the chip again.
+    var visible by androidx.compose.runtime.remember(text) { androidx.compose.runtime.mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(text) {
+        kotlinx.coroutines.delay(visibleMillis)
+        visible = false
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = visible,
+        enter = androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(durationMillis = 800)),
+        modifier = modifier
+    ) {
+        Surface(
+            color = color.copy(alpha = 0.14f),
+            shape = RoundedCornerShape(999.dp)
+        ) {
+            Text(
+                text = "▲ $text",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = color,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+            )
         }
     }
 }
@@ -544,10 +746,10 @@ fun RevenueCurveChart(
 }
 
 enum class NavigationTab(val label: String, val activeIcon: ImageVector, val inactiveIcon: ImageVector) {
-    TODAY("Today", Icons.Filled.Today, Icons.Outlined.Today),
+    TODAY("Today", Icons.Filled.AutoGraph, Icons.Outlined.AutoGraph),
     APPS("Apps", Icons.Filled.Apps, Icons.Outlined.Apps),
-    REPORTS("Reports", Icons.Filled.Assessment, Icons.Outlined.Assessment),
-    ANALYTICS("Analytics", Icons.Filled.Analytics, Icons.Outlined.Analytics),
+    REPORTS("Reports", Icons.Filled.BarChart, Icons.Outlined.BarChart),
+    ANALYTICS("Analytics", Icons.Filled.QueryStats, Icons.Outlined.QueryStats),
     WALLET("Wallet", Icons.Filled.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet)
 }
 
@@ -603,8 +805,8 @@ fun SolarBottomDock(
     } else {
         com.lavish.admob.theme.AdMobSelectedText
     }
-    val dividerColor = SolarTheme.colors.borderSubtle.copy(alpha = 0.75f)
-    val accentBarWidthDp = 32.dp
+    val pillBg = SolarTheme.colors.primaryContainer
+    val pillWidthDp = 56.dp
 
     Surface(
         modifier = modifier
@@ -624,9 +826,9 @@ fun SolarBottomDock(
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = 8.dp)
-                .height(64.dp)
+                .height(68.dp)
                 .onSizeChanged { trackWidthPx = it.width.toFloat() }
-                // Glide: press anywhere on the dock and slide — the accent bar follows your finger
+                // Glide: press anywhere on the dock and slide — the pill follows your finger
                 // and tabs switch live as you cross them.
                 .pointerInput(tabCount) {
                     detectHorizontalDragGestures(
@@ -654,6 +856,25 @@ fun SolarBottomDock(
                     )
                 }
         ) {
+            // Sliding pill indicator behind the active icon
+            if (trackWidthPx > 0f) {
+                val slotWPx = trackWidthPx / tabCount
+                val pillWPx = with(density) { pillWidthDp.toPx() }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 8.dp)
+                        .graphicsLayer {
+                            translationX = indicatorPos.value * slotWPx + (slotWPx - pillWPx) / 2f
+                            scaleX = pressScale
+                        }
+                        .width(pillWidthDp)
+                        .height(30.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(pillBg)
+                )
+            }
+
             Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 tabs.forEachIndexed { index, tab ->
                     // 0..1 how close the indicator is to this slot — drives smooth colour blending while gliding.
@@ -672,7 +893,7 @@ fun SolarBottomDock(
                                 if (tab != currentTab) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 onTabSelected(tab)
                             }
-                            .padding(top = 8.dp, bottom = 10.dp)
+                            .padding(top = 8.dp, bottom = 8.dp)
                             .graphicsLayer {
                                 val s = 1f + 0.06f * closeness * (if (isDragging) 1f else 0f)
                                 scaleX = s; scaleY = s
@@ -680,52 +901,28 @@ fun SolarBottomDock(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = if (isSelected) tab.activeIcon else tab.inactiveIcon,
-                            contentDescription = tab.label,
-                            tint = tint,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier.height(30.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isSelected) tab.activeIcon else tab.inactiveIcon,
+                                contentDescription = tab.label,
+                                tint = tint,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = tab.label.uppercase(),
-                            fontSize = 10.sp,
-                            letterSpacing = 0.8.sp,
+                            text = tab.label,
+                            fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                             color = tint,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-
-                    if (index < tabCount - 1) {
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(24.dp)
-                                .background(dividerColor)
-                        )
-                    }
                 }
-            }
-
-            // Sliding geometric bottom accent bar indicator
-            if (trackWidthPx > 0f) {
-                val slotWPx = trackWidthPx / tabCount
-                val barWPx = with(density) { accentBarWidthDp.toPx() }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(bottom = 4.dp)
-                        .graphicsLayer {
-                            translationX = indicatorPos.value * slotWPx + (slotWPx - barWPx) / 2f
-                            scaleX = pressScale
-                        }
-                        .width(accentBarWidthDp)
-                        .height(3.5.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(activeTint)
-                )
             }
         }
     }

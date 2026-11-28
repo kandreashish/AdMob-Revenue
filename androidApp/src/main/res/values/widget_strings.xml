@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_small_label">Today\'s earnings</string>
+    <string name="widget_large_label">Earnings overview</string>
+    <string name="widget_small_desc">Today\'s AdMob earnings</string>
+    <string name="widget_large_desc">Today vs yesterday, goal, impressions, eCPM and clicks</string>
+</resources>

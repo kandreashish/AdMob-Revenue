@@ -37,6 +37,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Velocity
 import com.lavish.admob.theme.EspressoSlate
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -145,31 +151,47 @@ fun IosPullToRefreshBox(
     val refreshingHeightPx = with(density) { refreshingHeight.toPx() }
     val maxPullDistancePx = with(density) { maxPullDistance.toPx() }
 
+    // Drag writes this synchronously (no launched snapTo → no stale-read jitter).
     val pullOffset = remember { Animatable(0f) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
 
-    // When refreshing ends, smoothly spring back to 0
-    LaunchedEffect(isRefreshing) {
-        if (!isRefreshing) {
-            pullOffset.animateTo(
-                targetValue = 0f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            )
+    val currentIsRefreshing by rememberUpdatedState(isRefreshing)
+    val currentOnRefresh by rememberUpdatedState(onRefresh)
+
+    val collapseSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    )
+    val holdSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMedium
+    )
+
+    fun settleTo(target: Float, spec: androidx.compose.animation.core.AnimationSpec<Float>) {
+        settleJob?.cancel()
+        settleJob = coroutineScope.launch {
+            pullOffset.snapTo(dragOffset)
+            isDragging = false
+            pullOffset.animateTo(target, spec) { dragOffset = value }
         }
     }
 
-    val nestedScrollConnection = remember(isRefreshing, thresholdPx, refreshingHeightPx, maxPullDistancePx) {
+    // Refresh finished (or never started) → collapse, unless the user is mid-drag.
+    LaunchedEffect(isRefreshing) {
+        if (!isRefreshing && !isDragging && dragOffset > 0f) settleTo(0f, collapseSpec)
+    }
+
+    val nestedScrollConnection = remember(thresholdPx, refreshingHeightPx, maxPullDistancePx) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                // When dragging up while pulled down, collapse pull offset first
-                if (source == NestedScrollSource.UserInput && available.y < 0 && pullOffset.value > 0f) {
-                    val newOffset = (pullOffset.value + available.y).coerceAtLeast(0f)
-                    val consumedY = newOffset - pullOffset.value
-                    coroutineScope.launch {
-                        pullOffset.snapTo(newOffset)
-                    }
+                // Dragging up while pulled down: collapse the pull offset first
+                if (source == NestedScrollSource.UserInput && available.y < 0 && dragOffset > 0f) {
+                    settleJob?.cancel(); isDragging = true
+                    val newOffset = (dragOffset + available.y).coerceAtLeast(0f)
+                    val consumedY = newOffset - dragOffset
+                    dragOffset = newOffset
                     return Offset(0f, consumedY)
                 }
                 return Offset.Zero
@@ -180,51 +202,39 @@ fun IosPullToRefreshBox(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                // When dragging down at the top of scrollable content
+                // Dragging down at the top of scrollable content
                 if (source == NestedScrollSource.UserInput && available.y > 0) {
-                    val current = pullOffset.value
-                    // Authentic iOS rubber-band damping curve
-                    val progress = (current / maxPullDistancePx).coerceIn(0f, 0.85f)
+                    settleJob?.cancel(); isDragging = true
+                    // iOS rubber-band damping curve
+                    val progress = (dragOffset / maxPullDistancePx).coerceIn(0f, 0.85f)
                     val damping = (1f - progress) * 0.5f
-                    val delta = available.y * damping
-                    val newOffset = (current + delta).coerceAtMost(maxPullDistancePx)
-                    coroutineScope.launch {
-                        pullOffset.snapTo(newOffset)
-                    }
+                    dragOffset = (dragOffset + available.y * damping).coerceAtMost(maxPullDistancePx)
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                // On finger release
-                if (pullOffset.value >= thresholdPx && !isRefreshing) {
-                    onRefresh()
-                    pullOffset.animateTo(
-                        targetValue = refreshingHeightPx,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    )
-                } else if (isRefreshing) {
-                    pullOffset.animateTo(
-                        targetValue = refreshingHeightPx,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    )
+                val wasDragging = isDragging
+                isDragging = false
+                if (!wasDragging || dragOffset <= 0f) return Velocity.Zero // plain content fling: don't interfere
+
+                if (dragOffset >= thresholdPx && !currentIsRefreshing) {
+                    currentOnRefresh()
+                    settleTo(refreshingHeightPx, holdSpec)
+                    // onRefresh may bail out (no token / already running) without ever flipping
+                    // isRefreshing → LaunchedEffect never fires. Check after a short grace period.
+                    coroutineScope.launch {
+                        delay(300)
+                        if (!currentIsRefreshing && !isDragging) settleTo(0f, collapseSpec)
+                    }
+                } else if (currentIsRefreshing) {
+                    settleTo(if (dragOffset > 0f) refreshingHeightPx else 0f, holdSpec)
                 } else {
-                    pullOffset.animateTo(
-                        targetValue = 0f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    )
+                    settleTo(0f, collapseSpec)
                 }
-                return Velocity.Zero
+                // Swallow the release velocity so content doesn't fling under the indicator
+                return available
             }
         }
     }
@@ -234,7 +244,7 @@ fun IosPullToRefreshBox(
     ) {
         // Offset is only read in layout/draw phases (not composition), so dragging
         // doesn't recompose the screen content every frame.
-        val indicatorVisible by remember { derivedStateOf { pullOffset.value > 2f } }
+        val indicatorVisible by remember { derivedStateOf { dragOffset > 2f } }
 
         // Indicator revealed above content
         if (indicatorVisible || isRefreshing) {
@@ -242,7 +252,7 @@ fun IosPullToRefreshBox(
                 modifier = Modifier
                     .fillMaxWidth()
                     .layout { measurable, constraints ->
-                        val h = pullOffset.value.roundToInt().coerceAtLeast(0)
+                        val h = dragOffset.roundToInt().coerceAtLeast(0)
                         val placeable = measurable.measure(
                             constraints.copy(minHeight = h, maxHeight = h)
                         )
@@ -252,7 +262,7 @@ fun IosPullToRefreshBox(
             ) {
                 IosActivityIndicator(
                     isRefreshing = isRefreshing,
-                    pullFraction = { (pullOffset.value / thresholdPx).coerceIn(0f, 1f) },
+                    pullFraction = { (dragOffset / thresholdPx).coerceIn(0f, 1f) },
                     size = 24.dp,
                     tint = indicatorTint
                 )
@@ -263,7 +273,7 @@ fun IosPullToRefreshBox(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .offset { IntOffset(0, pullOffset.value.roundToInt()) }
+                .offset { IntOffset(0, dragOffset.roundToInt()) }
         ) {
             content()
         }

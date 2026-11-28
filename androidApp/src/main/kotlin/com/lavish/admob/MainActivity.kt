@@ -62,10 +62,28 @@ internal object RepositoryHolder {
                             }
                         }
                     }
+                    // Only a real fetch result moves the widget's "last synced" — not goal edits,
+                    // range changes, cache loads or logout (those go through onTodaySummaryUpdated).
+                    repo.onSyncResult = { success ->
+                        if (success) {
+                            com.lavish.admob.widget.EarningsWidgets.markSynced(app)
+                        } else {
+                            com.lavish.admob.widget.EarningsWidgets.markSyncFailed(app)
+                            // Success redraws via onTodaySummaryUpdated; a failure must redraw here.
+                            com.lavish.admob.widget.EarningsWidgets.update(app, repo.todaySummary.value, repo.session.value)
+                        }
+                    }
                     repo.onTodaySummaryUpdated = { summary, session ->
                         LockscreenEarningsNotification.updateIfEnabled(app, summary, session)
+                        if (!session.isLoggedIn) com.lavish.admob.widget.EarningsWidgets.clearSync(app)
+                        com.lavish.admob.widget.EarningsWidgets.update(app, summary, session)
                     }
                     instance = repo
+                    com.lavish.admob.widget.EarningsWidgets.watchNetwork(app)
+                    // Widgets placed before the periodic job existed (or whose job was wiped by an app
+                    // update / force-stop / "clear data") never got onEnabled again, so they never
+                    // auto-synced. Re-arm on every process start; KEEP makes this a no-op if scheduled.
+                    runCatching { com.lavish.admob.widget.EarningsWidgets.ensurePeriodic(app) }
                 }
             }
         }
@@ -223,6 +241,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             BubbleEntitlementManager.access.collect { access ->
                 LockscreenEarningsNotification.enforceEntitlement(applicationContext, access)
+                com.lavish.admob.widget.EarningsWidgets.updateAll(applicationContext)
             }
         }
         if (savedInstanceState == null) BubbleLocalPrefs.incrementAppOpens(applicationContext)

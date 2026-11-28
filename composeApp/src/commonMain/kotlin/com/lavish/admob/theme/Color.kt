@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Color
 // ---------------------------------------------------------------------------
 
 // Primary — AdMob / Google Blue
-val SolarAmber = Color(0xFF3367D6)          // Google Blue 600 (AdMob primary)
+val SolarAmber = Color(0xFF1A73E8)          // Google Blue (AdMob primary)
 val SolarAmberLight = Color(0xFFE8F0FE)     // Blue 50 (selected / container)
 val SolarAmberGlow = Color(0xFFF1F6FE)
 
@@ -43,7 +43,11 @@ val AdMobYellowLight = Color(0xFFFEF7E0)
 
 // AdMob home "Total estimated earnings" card
 val AdMobHeroGrey = Color(0xFF5F6368)
+val AdMobHeroGreyBottom = Color(0xFF4A4E52)
 val AdMobSelectedText = Color(0xFF1967D2)   // Blue 700 — selected nav / chip text
+val AdMobSelectedBorder = Color(0xFFD2E3FC) // Blue 100 — selected pill border
+val AdMobProgressBlue = Color(0xFF8AB4F8)   // Light Google Blue on dark grey card
+val AdMobCoralRed = Color(0xFFEA4335)       // AdMob brand coral-red
 
 // Dark theme — Google dark surfaces
 val DarkCharcoalBg = Color(0xFF202124)

@@ -82,105 +82,76 @@ fun SolarTimeHorizonSelector(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Unified Zero-Scroll Segmented Horizon Dock
-        Surface(
+        // Google AdMob Pill Chips directly on canvas
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
                 .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(14.dp),
-            color = SolarTheme.colors.surfaceVariant,
-            border = BorderStroke(1.dp, SolarTheme.colors.borderSubtle),
-            shadowElevation = if (SolarTheme.colors.isDark) 0.dp else 1.dp
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                val containerColor = SolarTheme.colors.primaryContainer
-                val activeBgGradient = remember(containerColor) {
-                    Brush.horizontalGradient(colors = listOf(containerColor, containerColor))
+            items.forEach { item ->
+                val isSelected = item.range == selectedRange
+                val chipBg = if (isSelected) SolarTheme.colors.primaryContainer else SolarTheme.colors.cardBackground
+                val chipBorder = if (isSelected) {
+                    if (SolarTheme.colors.isDark) SolarTheme.colors.primary.copy(alpha = 0.5f)
+                    else com.lavish.admob.theme.AdMobSelectedBorder
+                } else {
+                    SolarTheme.colors.borderMedium
                 }
-                items.forEach { item ->
-                    val isSelected = item.range == selectedRange
-                    val elevation by animateDpAsState(
-                        targetValue = if (isSelected) 2.dp else 0.dp,
-                        animationSpec = spring(stiffness = 500f)
-                    )
+                val contentColor = if (isSelected) {
+                    if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.lavish.admob.theme.AdMobSelectedText
+                } else {
+                    SolarTheme.colors.textSecondary
+                }
 
-                    val activeContentColor = if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else com.lavish.admob.theme.AdMobSelectedText
-
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .shadow(
-                                elevation = elevation,
-                                shape = RoundedCornerShape(11.dp),
-                                ambientColor = Color.Transparent,
-                                spotColor = Color.Transparent
-                            )
-                            .clip(RoundedCornerShape(11.dp))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                if (item.range == TimeRange.CUSTOM) {
-                                    onCustomClick()
-                                } else {
-                                    onSelectRange(item.range)
-                                }
-                            },
-                        shape = RoundedCornerShape(11.dp),
-                        color = Color.Transparent
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(
-                                    if (isSelected) Modifier.background(activeBgGradient)
-                                    else Modifier
-                                ),
-                            contentAlignment = Alignment.Center
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            ) {
-                                if (item.isLive) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(5.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isSelected) activeContentColor else BotanicalGreen)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                }
-
-                                if (item.showEditIcon && isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = null,
-                                        tint = activeContentColor,
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                }
-
-                                Text(
-                                    text = item.label,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (isSelected) activeContentColor else SolarTheme.colors.textSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    textAlign = TextAlign.Center
-                                )
+                            if (item.range == TimeRange.CUSTOM) {
+                                onCustomClick()
+                            } else {
+                                onSelectRange(item.range)
                             }
+                        },
+                    shape = RoundedCornerShape(999.dp),
+                    color = chipBg,
+                    border = BorderStroke(1.dp, chipBorder)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = 2.dp)
+                        ) {
+                            if (item.showEditIcon && isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = contentColor,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                            }
+
+                            Text(
+                                text = item.label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = contentColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }

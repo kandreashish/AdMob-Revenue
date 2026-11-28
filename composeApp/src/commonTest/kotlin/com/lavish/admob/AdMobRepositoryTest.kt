@@ -310,12 +310,12 @@ class AdMobRepositoryTest {
     @Test
     fun testLastRefreshTimestampTracksRefreshes() {
         val repo = AdMobRepository(settings = null)
-        val initialTimestamp = repo.lastRefreshTimestampMs.value
-        assertTrue(initialTimestamp > 0L)
+        // Never synced => 0, so the UI can show "Not synced yet" instead of a fake "just now"
+        assertEquals(0L, repo.lastRefreshTimestampMs.value)
 
-        // Simulating a refresh timestamp update
+        // Simulating a successful refresh
         repo.recordRefreshTimestamp()
-        assertTrue(repo.lastRefreshTimestampMs.value >= initialTimestamp)
+        assertTrue(repo.lastRefreshTimestampMs.value > 0L)
     }
 
     @Test

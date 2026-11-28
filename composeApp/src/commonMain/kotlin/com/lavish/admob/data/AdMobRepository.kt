@@ -246,9 +246,11 @@ class AdMobRepository(
     )
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    // Time of the last *successful* AdMob fetch; 0 = never synced. A stored value in the future
+    // (device clock was moved back) is discarded so it can't show "just now" forever.
     private val _lastRefreshTimestampMs = MutableStateFlow(
-        settings?.getLong(KEY_CACHE_TIMESTAMP, Clock.System.now().toEpochMilliseconds())
-            ?: Clock.System.now().toEpochMilliseconds()
+        (settings?.getLong(KEY_CACHE_TIMESTAMP, 0L) ?: 0L)
+            .takeIf { it <= Clock.System.now().toEpochMilliseconds() } ?: 0L
     )
     val lastRefreshTimestampMs: StateFlow<Long> = _lastRefreshTimestampMs.asStateFlow()
 
@@ -256,6 +258,12 @@ class AdMobRepository(
     var tokenRefresher: (suspend () -> String?)? = null
     /** Optional platform hook notified whenever Today's persisted summary or session changes. */
     var onTodaySummaryUpdated: ((AccountSummary, UserSession) -> Unit)? = null
+    /**
+     * Optional platform hook fired after every fetch attempt: true = fresh data applied,
+     * false = the fetch failed (offline, auth error, API error). Fired before
+     * [onTodaySummaryUpdated] on success so "last synced" is stamped before widgets redraw.
+     */
+    var onSyncResult: ((success: Boolean) -> Unit)? = null
     @kotlin.concurrent.Volatile private var recomputeJob: kotlinx.coroutines.Job? = null
     private val recomputeMutex = Mutex()
     private val fetchMutex = Mutex()
@@ -526,7 +534,6 @@ class AdMobRepository(
         tracker.trackLoginInitiated("Google OAuth")
         _isRefreshing.value = true
         _authError.value = null
-        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
         currentAccessToken = cleanToken
 
         val resolvedName = name.ifBlank { "AdMob Publisher" }
@@ -567,7 +574,6 @@ class AdMobRepository(
         tracker.trackLoginInitiated("Google Profile")
         _isRefreshing.value = true
         _authError.value = null
-        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
         currentAccessToken = idToken
 
         val resolvedName = name.ifBlank { "AdMob Publisher" }
@@ -621,7 +627,6 @@ class AdMobRepository(
         tracker.trackLoginInitiated("API Token")
         _isRefreshing.value = true
         _authError.value = null
-        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
 
         scope.launch {
             try {
@@ -760,6 +765,7 @@ class AdMobRepository(
             _wallet.value = payload.wallet
             _isOffline.value = false
             _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
+            runCatching { onSyncResult?.invoke(true) }
 
             if (isLogin) tracker.trackLoginSucceeded(
                 method = if (token.startsWith("ya29")) "Google OAuth" else "API Token",
@@ -821,6 +827,7 @@ class AdMobRepository(
             } else {
                 _authError.value = err
             }
+            runCatching { onSyncResult?.invoke(false) }
         }
     }
 
@@ -834,11 +841,12 @@ class AdMobRepository(
         tracker.trackRefreshTriggered("Dashboard", "Manual / Live Sync", _isOffline.value)
         _isRefreshing.value = true
         _authError.value = null
-        _lastRefreshTimestampMs.value = Clock.System.now().toEpochMilliseconds()
         refreshJob = scope.launch {
             try {
                 fetchAndApplyRealData(token, _session.value.userName, _session.value.email, _session.value.avatarUrl)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                runCatching { onSyncResult?.invoke(false) }
                 if (hasOfflineCache && isNetworkFailure(e)) {
                     _isOffline.value = true
                     _authError.value = null
@@ -912,6 +920,8 @@ class AdMobRepository(
             remove(KEY_REPORT_PREFERENCES)
         }
         _customDailyGoal.value = null
+        _lastRefreshTimestampMs.value = 0L // next account must not inherit the old "last synced"
+        _isOffline.value = false
         _reportPreferences.value = ReportPreferences()
         _session.value = UserSession(
             isLoggedIn = false,

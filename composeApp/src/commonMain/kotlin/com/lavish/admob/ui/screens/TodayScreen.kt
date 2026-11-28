@@ -40,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.rounded.OpenInFull
@@ -51,14 +52,23 @@ import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.delay
+import androidx.compose.material.icons.outlined.Info
+import com.lavish.admob.ui.components.IncreaseChip
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -83,10 +93,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import com.lavish.admob.model.AccountSummary
@@ -108,6 +120,17 @@ import com.lavish.admob.theme.SolarAmber
 import com.lavish.admob.theme.SolarAmberGlow
 import com.lavish.admob.theme.SolarAmberLight
 import com.lavish.admob.theme.SolarTheme
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.HorizontalDivider
+import com.lavish.admob.theme.AdMobHeroGrey
+import com.lavish.admob.theme.AdMobHeroGreyBottom
+import com.lavish.admob.theme.AdMobProgressBlue
+import com.lavish.admob.theme.AdMobSelectedText
+import com.lavish.admob.theme.BotanicalGreenDark
+import com.lavish.admob.ui.components.AdMobBrandHeader
 import com.lavish.admob.ui.components.AppIcon
 import com.lavish.admob.ui.components.MetricTwinCard
 import com.lavish.admob.ui.components.SetGoalDialog
@@ -137,6 +160,42 @@ fun TodayScreen(
     var showCustomDateDialog by remember { mutableStateOf(false) }
     var showSetGoalDialog by remember { mutableStateOf(false) }
 
+    // --- Increase tracking: compare each refresh against the previous values for this range ---
+    var baseline by remember(selectedRange) { mutableStateOf<AccountSummary?>(null) }
+    var previous by remember(selectedRange) { mutableStateOf<AccountSummary?>(null) }
+    var infoMetric by remember { mutableStateOf<HomeMetric?>(null) }
+    val latestSummary by rememberUpdatedState(summary)
+    var lastSyncedAt by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(summary, isRefreshing) {
+        if (!isRefreshing) lastSyncedAt = currentTimeLabel()
+    }
+    // After a range switch, wait for the new range's data to settle before taking a baseline
+    LaunchedEffect(selectedRange, isRefreshing) {
+        if (!isRefreshing && baseline == null) {
+            delay(1000)
+            baseline = latestSummary
+        }
+    }
+    LaunchedEffect(summary, isRefreshing) {
+        val b = baseline ?: return@LaunchedEffect
+        if (!isRefreshing && summary != b) {
+            previous = b
+            baseline = summary
+        }
+    }
+    val prev = previous
+
+    infoMetric?.let { metric ->
+        MetricInfoDialog(
+            metric = metric,
+            current = summary,
+            previous = prev,
+            selectedRange = selectedRange,
+            lastSyncedAt = lastSyncedAt,
+            onDismiss = { infoMetric = null }
+        )
+    }
+
     val currentDate by rememberCurrentDate()
     val dynamicTodayTitle = remember(currentDate) {
         val today = currentDate
@@ -163,34 +222,28 @@ fun TodayScreen(
             .background(SolarTheme.colors.background),
         contentPadding = PaddingValues(bottom = 80.dp)
     ) {
-        // Top Header
+        // Top Header (AdMob Brand Header)
         item {
-            SolarHeader(
+            AdMobBrandHeader(
                 title = when (selectedRange) {
                     TimeRange.TODAY -> dynamicTodayTitle
-                    TimeRange.YESTERDAY -> "Yesterday's Performance"
+                    TimeRange.YESTERDAY -> "Yesterday"
                     TimeRange.LAST_7_DAYS -> "Past 7 Days"
                     TimeRange.THIS_MONTH -> "This Month"
                     TimeRange.DAYS_30 -> "Past 30 Days"
                     TimeRange.CUSTOM -> "Custom Range"
                 },
-                subtitle = when {
-                    isRefreshing -> "Syncing..."
-                    isOffline -> "Offline • Cached Data"
-                    summary.lastSyncTime.isBlank() || summary.lastSyncTime.equals("Awaiting Sync", ignoreCase = true) -> "Syncing..."
-                    else -> summary.lastSyncTime
-                },
                 accountName = accountName,
                 avatarUrl = avatarUrl,
                 isOffline = isOffline,
-                version = APP_VERSION,
+                isRefreshing = isRefreshing,
                 onAccountClick = onAccountClick
             )
+            Spacer(modifier = Modifier.height(10.dp))
         }
 
         // Time Range Horizon Ribbon
         item {
-            Spacer(modifier = Modifier.height(2.dp))
             SolarTimeHorizonSelector(
                 selectedRange = selectedRange,
                 onSelectRange = onSelectRange,
@@ -203,269 +256,302 @@ fun TodayScreen(
         // Platform-specific banner (Android: Earnings Bubble)
         PlatformSlots.todayBanner?.let { banner -> item { banner() } }
 
-        // Hero Sunlit Revenue Card
+        // Dark Grey Hero Earnings Card (#5F6368 -> #4A4E52)
         item {
             AnimatedContent(
                 targetState = summary,
                 transitionSpec = { fadeIn() togetherWith fadeOut() }
             ) { targetSummary ->
-                val heroGlow = if (SolarTheme.colors.isDark) {
-                    SolarAmber.copy(alpha = 0.12f)
-                } else {
-                    SolarAmberGlow.copy(alpha = 0.45f)
+                val heroBrush = remember {
+                    Brush.verticalGradient(
+                        colors = listOf(AdMobHeroGrey, AdMobHeroGreyBottom)
+                    )
                 }
-                // AdMob "Total estimated earnings" card: dark grey with white text
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    color = com.lavish.admob.theme.AdMobHeroGrey,
-                    shape = RoundedCornerShape(8.dp)
+                        .padding(horizontal = 16.dp)
+                        .shadow(
+                            elevation = 2.dp,
+                            shape = RoundedCornerShape(20.dp),
+                            ambientColor = Color.Black.copy(alpha = 0.04f)
+                        ),
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.Transparent
                 ) {
-                    Column(
+                    Box(
                         modifier = Modifier
-                                                        .padding(18.dp)
+                            .fillMaxWidth()
+                            .background(heroBrush)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(18.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f, fill = false)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.WbSunny,
-                                    contentDescription = null,
-                                    tint = Color(0xFFE8EAED),
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = when (selectedRange) {
-                                        TimeRange.TODAY -> "Today's Earnings"
-                                        TimeRange.YESTERDAY -> "Yesterday's Final"
-                                        TimeRange.LAST_7_DAYS -> "Last 7 Days Revenue"
-                                        TimeRange.THIS_MONTH -> "This Month Revenue"
-                                        TimeRange.DAYS_30 -> "Last 30 Days Revenue"
-                                        TimeRange.CUSTOM -> "Custom Range Revenue"
-                                    },
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFE8EAED),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                // Delta Badge
-                                val isPositive = targetSummary.deltaAmount >= 0.0
-                                val deltaBadgeColor = if (isPositive) Color(0xFF81C995) else Color(0xFFF28B82)
-                                val deltaBadgeBg = Color.White.copy(alpha = 0.12f)
-
-                                Surface(
-                                    color = deltaBadgeBg,
-                                    shape = RoundedCornerShape(999.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isPositive) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
-                                            contentDescription = null,
-                                            tint = deltaBadgeColor,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(
-                                            text = "${if (isPositive) "+" else "-"}${targetSummary.currencySymbol}${formatAmount(abs(targetSummary.deltaAmount))} vs prev",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = deltaBadgeColor,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-
-                                // Full Screen Distraction-Free Button
-                                if (onOpenFullScreen != null) {
-                                    Surface(
-                                        color = Color.White.copy(alpha = 0.12f),
-                                        shape = CircleShape,
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .clickable { onOpenFullScreen() }
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.OpenInFull,
-                                                contentDescription = "Full Screen Landscape Mode",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Large Confident Currency Figure
-                        Text(
-                            text = "${targetSummary.currencySymbol}${formatAmount(targetSummary.todayRevenue)}",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = Color.White,
-                            letterSpacing = (-0.02).sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Daily Goal Progress Bar
-                        Column {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val isGoalAchieved = targetSummary.dailyGoalProgress >= 1f
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.WbSunny,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFDD663),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = when (selectedRange) {
+                                            TimeRange.TODAY -> "Today's Earnings"
+                                            TimeRange.YESTERDAY -> "Yesterday's Final"
+                                            TimeRange.LAST_7_DAYS -> "Last 7 Days Revenue"
+                                            TimeRange.THIS_MONTH -> "This Month Revenue"
+                                            TimeRange.DAYS_30 -> "Last 30 Days Revenue"
+                                            TimeRange.CUSTOM -> "Custom Range Revenue"
+                                        },
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White.copy(alpha = 0.94f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    val isPositive = targetSummary.deltaAmount >= 0.0
+                                    val deltaBadgeBg = if (isPositive) BotanicalGreenLight else CoralCrimsonLight
+                                    val deltaBadgeText = if (isPositive) BotanicalGreenDark else Color(0xFFC5221F)
+
+                                    Surface(
+                                        color = deltaBadgeBg,
+                                        shape = RoundedCornerShape(999.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isPositive) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
+                                                contentDescription = null,
+                                                tint = deltaBadgeText,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text(
+                                                text = "${if (isPositive) "+" else "-"}${targetSummary.currencySymbol}${formatAmount(abs(targetSummary.deltaAmount))} vs prev",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = deltaBadgeText,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+
+                                    if (onOpenFullScreen != null) {
+                                        Surface(
+                                            color = Color.White.copy(alpha = 0.14f),
+                                            shape = CircleShape,
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .clickable { onOpenFullScreen() }
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.OpenInFull,
+                                                    contentDescription = "Full Screen Landscape Mode",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = if (isGoalAchieved) {
-                                        "🎯 ${(targetSummary.dailyGoalProgress * 100).toInt()}% goal achieved!"
-                                    } else {
-                                        "${(targetSummary.dailyGoalProgress * 100).toInt()}% of goal reached"
-                                    },
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isGoalAchieved) Color(0xFF81C995) else Color.White,
+                                    text = "${targetSummary.currencySymbol}${formatAmount(targetSummary.todayRevenue)}",
+                                    fontSize = 36.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    letterSpacing = (-0.02).sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
+                                HomeMetric.REVENUE.increaseText(prev, targetSummary)?.let {
+                                    IncreaseChip(text = it, color = Color(0xFF81C995), modifier = Modifier.padding(start = 8.dp))
+                                }
                                 Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Outlined.Info,
+                                    contentDescription = "Earnings details",
+                                    tint = Color(0xFFE8EAED),
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .clickable { infoMetric = HomeMetric.REVENUE }
+                                        .padding(4.dp)
+                                )
+                            }
 
-                                Surface(
-                                    color = Color.White.copy(alpha = 0.12f),
-                                    shape = RoundedCornerShape(999.dp),
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (targetSummary.isCustomGoal) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.25f)
-                                    ),
-                                    modifier = Modifier.clickable(enabled = onSetDailyGoal != null) {
-                                        showSetGoalDialog = true
-                                    }
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            HorizontalDivider(thickness = 1.dp, color = Color.White.copy(alpha = 0.16f))
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Daily Goal Progress Bar
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Edit,
-                                            contentDescription = "Edit Goal",
-                                            tint = if (targetSummary.isCustomGoal) Color.White else Color(0xFFE8EAED),
-                                            modifier = Modifier.size(10.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        val formattedGoal = if (targetSummary.periodGoal % 1.0 == 0.0) {
-                                            targetSummary.periodGoal.toInt().toString()
+                                    val isGoalAchieved = targetSummary.dailyGoalProgress >= 1f
+                                    Text(
+                                        text = if (isGoalAchieved) {
+                                            "${(targetSummary.dailyGoalProgress * 100).toInt()}% of daily goal reached!"
                                         } else {
-                                            formatAmount(targetSummary.periodGoal)
+                                            "${(targetSummary.dailyGoalProgress * 100).toInt()}% of daily goal"
+                                        },
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isGoalAchieved) Color(0xFF81C995) else Color.White.copy(alpha = 0.9f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                    val formattedGoal = if (targetSummary.periodGoal % 1.0 == 0.0) {
+                                        targetSummary.periodGoal.toInt().toString()
+                                    } else {
+                                        formatAmount(targetSummary.periodGoal)
+                                    }
+                                    Surface(
+                                        color = Color.White.copy(alpha = 0.16f),
+                                        shape = RoundedCornerShape(999.dp),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (targetSummary.isCustomGoal) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.22f)
+                                        ),
+                                        modifier = Modifier.clickable(enabled = onSetDailyGoal != null) {
+                                            showSetGoalDialog = true
                                         }
-                                        Text(
-                                            text = "Goal: ${targetSummary.currencySymbol}$formattedGoal${if (targetSummary.isCustomGoal) "" else " (Auto)"}",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (targetSummary.isCustomGoal) Color.White else Color(0xFFE8EAED),
-                                            maxLines = 1
-                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Goal: ${targetSummary.currencySymbol}$formattedGoal",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = Color.White,
+                                                maxLines = 1
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit Goal",
+                                                tint = Color.White.copy(alpha = 0.9f),
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                        }
                                     }
                                 }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val p = targetSummary.dailyGoalProgress
+                                val progressColor = if (p >= 1f) Color(0xFF81C995) else AdMobProgressBlue
+                                AnimatedGradientProgressBar(
+                                    progress = p.coerceIn(0f, 1f),
+                                    baseColor = progressColor,
+                                    trackColor = Color.White.copy(alpha = 0.22f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                )
                             }
-                            Spacer(modifier = Modifier.height(5.dp))
-                            // Same tiers as the earnings bubble (light tints for contrast on the dark card)
-                            val p = targetSummary.dailyGoalProgress
-                            val progressColor = when {
-                                p >= 1f -> Color(0xFF81C995)     // goal hit: green
-                                p >= 0.66f -> Color(0xFF8AB4F8)  // close: blue
-                                p >= 0.33f -> Color(0xFFFDD663)  // halfway: amber
-                                else -> Color(0xFFF28B82)        // behind: red
-                            }
-                            AnimatedGradientProgressBar(
-                                progress = p.coerceIn(0f, 1f),
-                                baseColor = progressColor,
-                                trackColor = Color.White.copy(alpha = 0.2f),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                            )
                         }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // Focus Metric Twin Cards: Row 1 (eCPM, Impressions) & Row 2 (CTR, Clicks)
+        // Elevated 2x2 KPI Metric Cards (matching the blue-card Stitch design)
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    MetricTwinCard(
-                        label = "Average eCPM",
+                    ElevatedKpiCard(
+                        label = "Avg eCPM",
                         value = "${summary.currencySymbol}${formatAmount(summary.ecpm)}",
-                        subBadge = if (summary.ecpm > 0) "Live yield" else "No impressions",
-                        isPositive = summary.ecpm > 0,
-                        icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        badgeText = if (summary.ecpm > 0) "↗ Live yield" else "No impressions",
+                        badgeBg = if (summary.ecpm > 0) SolarTheme.colors.successContainer else SolarTheme.colors.surfaceVariant,
+                        badgeColor = if (summary.ecpm > 0) SolarTheme.colors.onSuccessContainer else SolarTheme.colors.textSecondary,
+                        increaseText = HomeMetric.ECPM.increaseText(prev, summary),
+                        icon = Icons.Outlined.Info,
+                        onClick = { infoMetric = HomeMetric.ECPM },
                         modifier = Modifier.weight(1f)
                     )
-
-                    MetricTwinCard(
+                    ElevatedKpiCard(
                         label = "Impressions",
                         value = formatCompactNumber(summary.impressions),
-                        subBadge = if (summary.impressions > 0) "${summary.fillRate}% fill" else "0 fill",
-                        isPositive = summary.impressions > 0,
+                        badgeText = if (summary.impressions > 0) "${summary.fillRate}% fill rate" else "0% fill rate",
+                        badgeBg = if (summary.impressions > 0) SolarTheme.colors.primaryContainer else SolarTheme.colors.surfaceVariant,
+                        badgeColor = if (summary.impressions > 0) {
+                            if (SolarTheme.colors.isDark) SolarTheme.colors.onPrimaryContainer else AdMobSelectedText
+                        } else {
+                            SolarTheme.colors.textSecondary
+                        },
+                        increaseText = HomeMetric.IMPRESSIONS.increaseText(prev, summary),
                         icon = Icons.Default.RemoveRedEye,
+                        onClick = { infoMetric = HomeMetric.IMPRESSIONS },
                         modifier = Modifier.weight(1f)
                     )
                 }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    MetricTwinCard(
-                        label = "CTR (Click Rate)",
+                    ElevatedKpiCard(
+                        label = "CTR",
                         value = "${summary.ctr}%",
-                        subBadge = if (summary.ctr > 0) "${formatCompactNumber(summary.clicks)} clicks" else "0 clicks",
-                        isPositive = summary.ctr > 0,
+                        badgeText = "${formatCompactNumber(summary.clicks)} clicks",
+                        badgeBg = SolarTheme.colors.surfaceVariant,
+                        badgeColor = SolarTheme.colors.textSecondary,
+                        increaseText = HomeMetric.CTR.increaseText(prev, summary),
                         icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        onClick = { infoMetric = HomeMetric.CTR },
                         modifier = Modifier.weight(1f)
                     )
-
-                    MetricTwinCard(
+                    ElevatedKpiCard(
                         label = "Total Clicks",
                         value = formatCompactNumber(summary.clicks),
-                        subBadge = if (summary.clicks > 0) "User actions" else "No clicks",
-                        isPositive = summary.clicks > 0,
-                        icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        badgeText = if (summary.clicks > 0) "User actions" else "No clicks",
+                        badgeBg = SolarTheme.colors.surfaceVariant,
+                        badgeColor = SolarTheme.colors.textSecondary,
+                        increaseText = HomeMetric.CLICKS.increaseText(prev, summary),
+                        icon = Icons.Outlined.Info,
+                        onClick = { infoMetric = HomeMetric.CLICKS },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -490,10 +576,10 @@ fun TodayScreen(
                 )
                 if (apps.isNotEmpty()) {
                     Text(
-                        text = "View All",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = OceanAzure,
+                        text = "View all →",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SolarAmber,
                         modifier = Modifier.clickable { onViewAllApps() }
                     )
                 }
@@ -508,8 +594,8 @@ fun TodayScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     color = SolarTheme.colors.cardBackground,
-                    shape = RoundedCornerShape(18.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, SolarTheme.colors.borderSubtle)
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, SolarTheme.colors.borderMedium)
                 ) {
                     Column(
                         modifier = Modifier.padding(18.dp),
@@ -534,74 +620,155 @@ fun TodayScreen(
         } else {
             val topApps = apps.take(4)
             val topKeys = uniqueKeys(topApps) { "today_" + it.id }
+            val totalAppRevenue = apps.sumOf { it.todayRevenue }.coerceAtLeast(0.01)
             itemsIndexed(topApps, key = { i, _ -> topKeys[i] }) { _, app ->
+                val shareRatio = (app.todayRevenue / totalAppRevenue).toFloat().coerceIn(0f, 1f)
+                val sharePct = ((shareRatio * 1000).toInt() / 10.0)
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(18.dp))
+                        .padding(horizontal = 16.dp, vertical = 5.dp)
+                        .shadow(
+                            elevation = 2.dp,
+                            shape = RoundedCornerShape(20.dp),
+                            ambientColor = Color.Black.copy(alpha = 0.04f)
+                        )
+                        .clip(RoundedCornerShape(20.dp))
+                        .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(20.dp))
                         .clickable { onSelectApp(app) },
-                    color = SolarTheme.colors.cardBackground
+                    color = SolarTheme.colors.cardBackground,
+                    shape = RoundedCornerShape(20.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Real Store Icon with graceful Monogram fallback
-                            AppIcon(app = app, size = 38.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
+                                AppIcon(app = app, size = 40.dp)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
+                                    Text(
+                                        text = app.name,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SolarTheme.colors.textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "${formatCompactNumber(app.totalImpressions)} imp • ${summary.currencySymbol}${formatAmount(app.avgEcpm)} eCPM",
+                                        fontSize = 11.sp,
+                                        color = SolarTheme.colors.textSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
 
                             Spacer(modifier = Modifier.width(10.dp))
 
-                            Column(modifier = Modifier.weight(1f, fill = false)) {
+                            Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = app.name,
-                                    fontSize = 14.sp,
+                                    text = "${summary.currencySymbol}${formatAmount(app.todayRevenue)}",
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = SolarTheme.colors.textPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    color = SolarTheme.colors.textPrimary
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "${app.platform} • ${app.formats.firstOrNull()?.formatName ?: "AdMob Network"}",
+                                    text = "$sharePct% share",
                                     fontSize = 11.sp,
-                                    color = SolarTheme.colors.textSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BotanicalGreen
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = "${summary.currencySymbol}${formatAmount(app.todayRevenue)}",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = SolarTheme.colors.textPrimary
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(SolarTheme.colors.borderSubtle)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(shareRatio)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(SolarAmber)
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            val isAppPositive = app.deltaVsYesterday >= 0.0
-                            Surface(
-                                color = if (isAppPositive) SolarTheme.colors.successContainer else SolarTheme.colors.errorContainer,
-                                shape = RoundedCornerShape(999.dp)
-                            ) {
-                                Text(
-                                    text = "${if (isAppPositive) "+" else "-"}${summary.currencySymbol}${formatAmount(abs(app.deltaVsYesterday))}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isAppPositive) BotanicalGreen else CoralCrimson,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                )
-                            }
                         }
+                    }
+                }
+            }
+        }
+
+        // Network Health Status Row
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .shadow(
+                        elevation = 4.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.16f)
+                    )
+                    .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(16.dp)),
+                color = SolarTheme.colors.cardBackground,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = if (isOffline) com.lavish.admob.theme.AdMobYellow else BotanicalGreen,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isOffline) "AdMob Network: Offline (Cached)" else "AdMob Network: 100% operational",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = SolarTheme.colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (isOffline) com.lavish.admob.theme.AdMobYellow else BotanicalGreen)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = lastSyncedAt ?: "Synced",
+                            fontSize = 11.sp,
+                            color = SolarTheme.colors.textSecondary
+                        )
                     }
                 }
             }
@@ -610,31 +777,26 @@ fun TodayScreen(
 
     if (showCustomDateDialog) {
         val now = remember { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date }
-        var startInput by remember { mutableStateOf(now.minus(29, DateTimeUnit.DAY).toString()) }
-        var endInput by remember { mutableStateOf(now.toString()) }
+        val earliest = remember(now) { now.minus(90, DateTimeUnit.DAY) }
+        var startDate by remember { mutableStateOf(now.minus(29, DateTimeUnit.DAY)) }
+        var endDate by remember { mutableStateOf(now) }
         var inputError by remember { mutableStateOf<String?>(null) }
+        var showRangePicker by remember { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { showCustomDateDialog = false },
             confirmButton = {
                 Button(
                     onClick = {
-                        try {
-                            val sDate = LocalDate.parse(startInput.trim())
-                            val eDate = LocalDate.parse(endInput.trim())
-                            val earliest = now.minus(90, DateTimeUnit.DAY)
-                            if (sDate > eDate) {
-                                inputError = "Start date must be before end date"
-                            } else if (eDate > now) {
-                                inputError = "End date can't be in the future"
-                            } else if (sDate < earliest) {
-                                inputError = "Only the last 90 days are synced (from $earliest)"
-                            } else {
-                                showCustomDateDialog = false
-                                onSelectCustomRange?.invoke(sDate, eDate)
-                            }
-                        } catch (_: Exception) {
-                            inputError = "Invalid date format. Use YYYY-MM-DD"
+                        if (startDate > endDate) {
+                            inputError = "Start date must be before end date"
+                        } else if (endDate > now) {
+                            inputError = "End date can't be in the future"
+                        } else if (startDate < earliest) {
+                            inputError = "Only the last 90 days are synced (from $earliest)"
+                        } else {
+                            showCustomDateDialog = false
+                            onSelectCustomRange?.invoke(startDate, endDate)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = SolarAmber)
@@ -679,8 +841,8 @@ fun TodayScreen(
                                 shape = RoundedCornerShape(999.dp),
                                 color = SolarTheme.colors.surfaceVariant,
                                 modifier = Modifier.clickable {
-                                    startInput = span.first.toString()
-                                    endInput = span.second.toString()
+                                    startDate = span.first
+                                    endDate = span.second
                                     inputError = null
                                 }
                             ) {
@@ -695,22 +857,18 @@ fun TodayScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                    OutlinedTextField(
-                        value = startInput,
-                        onValueChange = { startInput = it; inputError = null },
-                        label = { Text("Start Date (YYYY-MM-DD)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                    DatePickerField(
+                        label = "Start Date",
+                        date = startDate,
+                        onClick = { showRangePicker = true }
                     )
 
-                    OutlinedTextField(
-                        value = endInput,
-                        onValueChange = { endInput = it; inputError = null },
-                        label = { Text("End Date (YYYY-MM-DD)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                    DatePickerField(
+                        label = "End Date",
+                        date = endDate,
+                        onClick = { showRangePicker = true }
                     )
 
                     if (inputError != null) {
@@ -724,6 +882,22 @@ fun TodayScreen(
                 }
             }
         )
+
+        if (showRangePicker) {
+            CustomDateRangePickerModal(
+                initialStartDate = startDate,
+                initialEndDate = endDate,
+                minDate = earliest,
+                maxDate = now,
+                onRangeSelected = { pickedStart, pickedEnd ->
+                    startDate = pickedStart
+                    endDate = pickedEnd
+                    inputError = null
+                    showRangePicker = false
+                },
+                onDismiss = { showRangePicker = false }
+            )
+        }
     }
 
     if (showSetGoalDialog) {
@@ -818,4 +992,319 @@ private fun AnimatedGradientProgressBar(
                 }
             }
     )
+}
+
+
+/** Metrics shown as cards on the home screen, with how to read/compare/format them. */
+internal enum class HomeMetric(val title: String, val description: String) {
+    REVENUE("Estimated Earnings", "Total estimated AdMob earnings for the selected period across all your apps."),
+    ECPM("Average eCPM", "Effective cost per mille — what you earn per 1,000 impressions (earnings ÷ impressions × 1000)."),
+    IMPRESSIONS("Impressions", "Number of ads shown to users during the selected period."),
+    CTR("CTR (Click Rate)", "Click-through rate — the percentage of impressions that resulted in a click (clicks ÷ impressions × 100)."),
+    CLICKS("Total Clicks", "Number of times users clicked on your ads during the selected period.");
+
+    fun raw(s: AccountSummary): Double = when (this) {
+        REVENUE -> s.todayRevenue
+        ECPM -> s.ecpm
+        IMPRESSIONS -> s.impressions.toDouble()
+        CTR -> s.ctr
+        CLICKS -> s.clicks.toDouble()
+    }
+
+    fun format(s: AccountSummary, v: Double): String = when (this) {
+        REVENUE, ECPM -> "${s.currencySymbol}${formatAmount(v)}"
+        IMPRESSIONS, CLICKS -> formatCompactNumber(v.toInt())
+        CTR -> "${formatAmount(v)}%"
+    }
+
+    /** "+X" if the metric went up since [prev], otherwise null. */
+    fun increaseText(prev: AccountSummary?, current: AccountSummary): String? {
+        if (prev == null) return null
+        val diff = raw(current) - raw(prev)
+        val threshold = if (this == IMPRESSIONS || this == CLICKS) 0.5 else 0.005
+        if (diff < threshold) return null
+        return "+${format(current, diff)}"
+    }
+}
+
+@Composable
+private fun MetricInfoDialog(
+    metric: HomeMetric,
+    current: AccountSummary,
+    previous: AccountSummary?,
+    selectedRange: TimeRange,
+    lastSyncedAt: String?,
+    onDismiss: () -> Unit
+) {
+    val now = metric.raw(current)
+    val periodLabel = when (selectedRange) {
+        TimeRange.TODAY -> "Today"
+        TimeRange.YESTERDAY -> "Yesterday"
+        TimeRange.LAST_7_DAYS -> "Last 7 days"
+        TimeRange.THIS_MONTH -> "This month"
+        TimeRange.DAYS_30 -> "Last 30 days"
+        TimeRange.CUSTOM -> "Custom range"
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SolarTheme.colors.cardBackground,
+        title = {
+            Text(metric.title, fontWeight = FontWeight.Bold, color = SolarTheme.colors.textPrimary)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(metric.description, fontSize = 13.sp, color = SolarTheme.colors.textSecondary)
+                Spacer(modifier = Modifier.height(4.dp))
+                InfoRow("Period", periodLabel)
+                InfoRow("Current value", metric.format(current, now))
+                if (previous != null) {
+                    val before = metric.raw(previous)
+                    val diff = now - before
+                    InfoRow("Before last refresh", metric.format(previous, before))
+                    val sign = if (diff >= 0) "+" else "-"
+                    val pct = if (before != 0.0) " (${sign}${formatAmount(abs(diff) / before * 100)}%)" else ""
+                    InfoRow(
+                        "Change",
+                        "$sign${metric.format(current, abs(diff))}$pct",
+                        valueColor = when {
+                            diff > 0 -> com.lavish.admob.ui.components.IncreaseGreen
+                            diff < 0 -> CoralCrimson
+                            else -> SolarTheme.colors.textPrimary
+                        }
+                    )
+                } else {
+                    Text(
+                        "No change recorded yet — the increase will appear after the next refresh.",
+                        fontSize = 12.sp,
+                        color = SolarTheme.colors.textSecondary
+                    )
+                }
+                if (metric == HomeMetric.REVENUE) {
+                    InfoRow("Previous period", "${current.currencySymbol}${formatAmount(current.yesterdayRevenue)}")
+                    InfoRow("Goal progress", "${(current.dailyGoalProgress * 100).toInt()}%")
+                }
+                if (metric == HomeMetric.IMPRESSIONS) InfoRow("Fill rate", "${current.fillRate}%")
+                InfoRow("Last synced", lastSyncedAt ?: "—")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
+private fun InfoRow(label: String, value: String, valueColor: Color = SolarTheme.colors.textPrimary) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, fontSize = 13.sp, color = SolarTheme.colors.textSecondary)
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = valueColor)
+    }
+}
+
+/** Local wall-clock time like "3:07 PM". */
+private fun currentTimeLabel(): String {
+    val t = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+    val h12 = if (t.hour % 12 == 0) 12 else t.hour % 12
+    val ampm = if (t.hour < 12) "AM" else "PM"
+    return "$h12:${t.minute.toString().padStart(2, '0')} $ampm"
+}
+
+@Composable
+private fun ElevatedKpiCard(
+    label: String,
+    value: String,
+    badgeText: String,
+    badgeBg: Color,
+    badgeColor: Color,
+    increaseText: String?,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .shadow(
+                elevation = 2.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = Color.Black.copy(alpha = 0.04f)
+            )
+            .clip(RoundedCornerShape(20.dp))
+            .border(1.dp, SolarTheme.colors.borderSubtle, RoundedCornerShape(20.dp))
+            .clickable { onClick() },
+        color = SolarTheme.colors.cardBackground,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = SolarTheme.colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(
+                    imageVector = icon,
+                    contentDescription = "$label details",
+                    tint = SolarTheme.colors.textMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = value,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SolarTheme.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                increaseText?.let {
+                    IncreaseChip(
+                        text = it,
+                        color = BotanicalGreen,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                color = badgeBg,
+                shape = RoundedCornerShape(999.dp)
+            ) {
+                Text(
+                    text = badgeText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = badgeColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DatePickerField(
+    label: String,
+    date: LocalDate,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = SolarTheme.colors.surfaceVariant,
+        border = BorderStroke(1.dp, SolarTheme.colors.textMuted.copy(alpha = 0.25f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = label,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = SolarTheme.colors.textSecondary
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${date.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }} ${date.day}, ${date.year}",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SolarTheme.colors.textPrimary
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.CalendarToday,
+                contentDescription = "Pick $label",
+                tint = SolarAmber,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CustomDateRangePickerModal(
+    initialStartDate: LocalDate,
+    initialEndDate: LocalDate,
+    minDate: LocalDate,
+    maxDate: LocalDate,
+    onRangeSelected: (LocalDate, LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val minMillis = remember(minDate) { minDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds() }
+    val maxMillis = remember(maxDate) { maxDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds() }
+    val rangePickerState = rememberDateRangePickerState(
+        initialSelectedStartDateMillis = initialStartDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds(),
+        initialSelectedEndDateMillis = initialEndDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds(),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                utcTimeMillis in minMillis..maxMillis
+
+            override fun isSelectableYear(year: Int): Boolean =
+                year in minDate.year..maxDate.year
+        }
+    )
+
+    val canConfirm = rangePickerState.selectedStartDateMillis != null &&
+        rangePickerState.selectedEndDateMillis != null
+
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                enabled = canConfirm,
+                onClick = {
+                    val startMillis = rangePickerState.selectedStartDateMillis
+                    val endMillis = rangePickerState.selectedEndDateMillis
+                    if (startMillis != null && endMillis != null) {
+                        val sDate = Instant.fromEpochMilliseconds(startMillis).toLocalDateTime(TimeZone.UTC).date
+                        val eDate = Instant.fromEpochMilliseconds(endMillis).toLocalDateTime(TimeZone.UTC).date
+                        onRangeSelected(sDate, eDate)
+                    } else {
+                        onDismiss()
+                    }
+                }
+            ) {
+                Text(
+                    "OK",
+                    fontWeight = FontWeight.Bold,
+                    color = if (canConfirm) SolarAmber else SolarTheme.colors.textMuted
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = SolarTheme.colors.textSecondary)
+            }
+        }
+    ) {
+        DateRangePicker(
+            state = rangePickerState,
+            showModeToggle = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(480.dp)
+                .padding(top = 8.dp)
+        )
+    }
 }

@@ -313,7 +313,7 @@ fun FullScreenEarningScreen(
 
             // eCPM · Impressions · CTR · Goal
             val goalPct = if (summary.dailyGoal > 0.0) (summary.todayRevenue / summary.dailyGoal * 100).toInt() else 0
-            Row(horizontalArrangement = Arrangement.spacedBy(48.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                 HudStat("eCPM", "${summary.currencySymbol}${formatAmount(summary.ecpm)}", textSecondaryColor, statValueColor)
                 HudStat("Impressions", formatCompactNumber(summary.impressions), textSecondaryColor, statValueColor)
                 HudStat("CTR", "${summary.ctr}%", textSecondaryColor, statValueColor)
@@ -507,8 +507,8 @@ private fun HudLastSync(lastSyncMs: Long, color: Color, modifier: Modifier = Mod
 @Composable
 private fun HudStat(label: String, value: String, labelColor: Color, valueColor: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, fontSize = 15.sp, fontWeight = FontWeight.Normal, color = labelColor)
-        Text(text = value, fontSize = 21.sp, fontWeight = FontWeight.Bold, color = valueColor)
+        Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.Normal, color = labelColor)
+        Text(text = value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = valueColor)
     }
 }
 
